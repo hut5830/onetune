@@ -20,7 +20,12 @@
         "monochromeImage": "./assets/android-icon-monochrome.png"
       },
       "predictiveBackGestureEnabled": false,
-      "package": "com.onetune.dsp"
+      "package": "com.onetune.dsp",
+      "permissions": [
+        "android.permission.BLUETOOTH",
+        "android.permission.BLUETOOTH_ADMIN",
+        "android.permission.BLUETOOTH_CONNECT"
+      ]
     },
     "web": {
       "favicon": "./assets/favicon.png"
@@ -35,6 +40,12 @@
         }
       ]
     ],
-    "scheme": "onetune"
+    "scheme": "onetune",
+    "extra": {
+      "router": {},
+      "eas": {
+        "projectId": "847719a7-ad8c-4ff4-b8a0-3ec19d92ff45"
+      }
+    }
   }
 }
