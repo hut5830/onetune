@@ -39,3 +39,26 @@ yarn-error.*
 # generated native folders
 /ios
 /android
+
+# Windows
+Thumbs.db
+desktop.ini
+
+# editors
+.idea/
+
+# build outputs
+*.apk
+*.aab
+
+# BLE captures / Inspector logs (may contain device addresses)
+btsnoop_hci.log
+*.pcap
+*.pcapng
+*.cfa
+
+# Claude Code local settings
+.claude/settings.local.json
+
+# stray files from a broken ".eas\workflows\..." path on Windows
+/.easworkflows*
