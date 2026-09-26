@@ -1,17 +1,18 @@
 # OneTune DSP
 
-แอปเดียวสำหรับจูน DSP เครื่องเสียงรถยนต์หลายยี่ห้อ (React Native + Expo SDK 57, TypeScript)
+แอปเดียวสำหรับจูน DSP ของชุดลำโพง (ตู้แอคทีฟ 2/3 ทาง + ซับ) และเครื่องเสียงรถยนต์หลายยี่ห้อ (React Native + Expo SDK 57, TypeScript)
 
-## สถานะตอนนี้ (สัปดาห์ 2 ของแผน)
+## สถานะตอนนี้ (v1.1 · ดีไซน์ใหม่)
 
 | ส่วน | สถานะ |
 |---|---|
 | ค้นหาอุปกรณ์ BLE + ขอสิทธิ์ Android 12+ | ✅ ใช้กับเครื่องจริงได้ |
 | BLE Inspector (ดู GATT, อ่าน, รับ notify, ส่ง hex, จดโน้ต, แชร์ log เป็น JSON) | ✅ ใช้กับเครื่องจริงได้ |
-| หน้าจูน: รถ + ลำโพง, EQ 31 แบนด์, PEQ, ครอสโอเวอร์, เกน, ดีเลย์, เฟส, มิวท์, ลิงก์/คัดลอก L↔R, พิมพ์ตัวเลขได้ทุกช่อง | ✅ ทำงานในโหมดจำลอง |
+| หน้าจูน: โหมดลำโพง (ภาพตู้ลำโพง) + โหมดรถ, เลือกการจัดวาง 2/3 ทาง/ซับ, EQ 31 แบนด์, PEQ ลากบนกราฟได้, ครอสโอเวอร์, เกน, ดีเลย์, เฟส, มิวท์, ลิงก์/คัดลอก L↔R, ปุ่มหมุน Master, พิมพ์ตัวเลขได้ทุกช่อง | ✅ ทำงานในโหมดจำลอง |
+| ป้องกันลำโพง: HPF ทวีตเตอร์ล็อก ≥ 1 kHz, เสียงกลาง ≥ 100 Hz, ≥ 12 dB/oct (ทั้งตอนปรับ โหลดพรีเซ็ต และเปลี่ยน layout) | ✅ มีเทสใน selftest |
 | Capability profile ต่อรุ่น (NDSK4265AU, PXE-R500, DSPA 810 Pro, AXDSP-X) | ✅ ตามสเปก บางค่ารอยืนยัน |
 | ไดรเวอร์จริงของแต่ละยี่ห้อ | ⏳ รอดักแพ็กเก็ตจากเครื่องจริง |
-| หน้าสัญญาณเข้า / routing, พรีเซ็ต, Time Alignment จากระยะ | ⏳ มีใน session แล้ว ยังไม่มีหน้าจอ |
+| หน้าสัญญาณเข้า / routing, พรีเซ็ต (บันทึก/โหลด/แชร์ JSON), Time Alignment จากระยะ, จำค่าครั้งก่อน | ✅ ทำงานในโหมดจำลอง |
 
 **ความปลอดภัย:** ไดรเวอร์ที่ยัง `mapped: false` จะไม่เขียนอะไรลงเครื่องจริงเด็ดขาด คำสั่งไปอยู่ใน log อย่างเดียว
 
@@ -42,9 +43,12 @@ npx eas-cli@latest build -p android --profile preview       # APK ใช้ง�
 ```
 src/
   app/                 หน้าจอ (Expo Router)
-    index.tsx          ค้นหาอุปกรณ์ + พรีวิวหน้าจูนตามรุ่น
+    index.tsx          หน้าแรก: เลือกลำโพง/รถ, ค้นหาอุปกรณ์, โหมดทดลอง
+    tune.tsx           สตูดิโอจูน: ภาพตู้/รถ, Master, กราฟรวม, รายการช่อง, เครื่องมือ
+    align.tsx          Time Alignment จากระยะ
+    inputs.tsx         แหล่งเสียง + routing matrix
+    presets.tsx        พรีเซ็ต บันทึก/โหลด/แชร์/นำเข้า
     inspector.tsx      BLE Inspector / log
-    tune.tsx           หน้าจูน
   ble/
     client.ts          ห่อ react-native-ble-plx (scan, connect, MTU, read, write, notify)
     connection.ts      สถานะการเชื่อมต่อปัจจุบัน
@@ -57,10 +61,13 @@ src/
     demo.ts            ไดรเวอร์จำลอง (รูปแบบเฟรมสมมติ)
     registry.ts        รุ่น → ไดรเวอร์
   model/
-    tuning.ts          โมเดลช่องลำโพง, layout 6/8/10 ช่อง, ค่าเริ่มต้น
-    session.ts         สถานะการจูน + ลิงก์ L/R + ส่งผ่านคิว
+    tuning.ts          ช่องลำโพง, layout ของลำโพง/รถ, ค่าเริ่มต้นที่ปลอดภัย, guard ครอสโอเวอร์, คำนวณดีเลย์จากระยะ
+    session.ts         สถานะการจูน + ลิงก์ L/R + ส่งผ่านคิว (ไม่ผูกกับ BLE โดยตรง ทดสอบใน Node ได้)
+    current.ts         session ปัจจุบันที่หน้าเครื่องมือใช้ร่วมกัน
+    store.ts           AsyncStorage: พรีเซ็ต, ค่าครั้งก่อน, โหมดที่เลือก
   lib/                 hex/base64, biquad math, format
-  components/          CarView, ResponseGraph, EqBars, ChannelSheet, NumberPrompt, ui
+  components/          SpeakerStage, CarView, ResponseGraph, EqBars, ChannelSheet, Knob, Slider, Radar, Icon, ui ...
+  theme.ts             โทนสี/ฟอนต์ (Chakra Petch + IBM Plex Sans Thai)
 scripts/selftest.ts    ทดสอบ logic ใน Node
 ```
 

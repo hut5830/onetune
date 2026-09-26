@@ -2,6 +2,8 @@ export type XoType = 'LR' | 'BW' | 'BE';
 export type SourceId = 'hl' | 'rca' | 'opt' | 'bt' | 'usb';
 export type Family = 'tiger' | 'chs' | 'own' | 'demo';
 export type Extra = 'navi' | 'lock' | 'presets6' | 'phaseRot' | 'allpass' | 'chime';
+/** Where the DSP is installed: a standalone speaker system or a car. Drives layouts, defaults and visuals. */
+export type Scene = 'speaker' | 'car';
 
 /** What a model can do. The UI only offers controls and ranges listed here. */
 export interface CapabilityProfile {
@@ -10,7 +12,9 @@ export interface CapabilityProfile {
   model: string;
   family: Family;
   transport: string;
-  outputs: 6 | 8 | 10;
+  outputs: number;
+  /** Installations this model is sold for; the first one is the default. */
+  scenes: Scene[];
   hlInputs: number;
   rcaInputs: number;
   sources: SourceId[];

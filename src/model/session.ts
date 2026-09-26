@@ -1,33 +1,44 @@
 import { useSyncExternalStore } from 'react';
-import { Change, Driver, Frame } from '../drivers/types';
+import { Change, Driver, Frame, Scene, SourceId } from '../drivers/types';
 import { captureLog } from '../ble/captureLog';
-import { ble } from '../ble/client';
 import { WriteQueue } from '../ble/writeQueue';
-import { Band, Channel, Xover, TuningState, defaultRoute, fitXover, initialState, inputCount } from './tuning';
-import { SourceId } from '../drivers/types';
+import { Band, Channel, Xover, TuningState, defaultRoute, delaysFromDistances, guardXover, initialState, inputCount, layoutById } from './tuning';
 import { clamp } from '../lib/format';
 
 type Linkable = (c: Channel) => void;
+/** Writes bytes to the device. Injected so this module stays free of native BLE code (and testable in Node). */
+export type Writer = (deviceId: string, service: string, char: string, bytes: Uint8Array, withResponse: boolean) => Promise<void>;
+
+/** Every change needed to push a complete state to the device. */
+function allChanges(s: TuningState): Change[] {
+  const all: Change[] = [{ kind: 'master' }, { kind: 'input' }];
+  for (const c of s.channels) {
+    all.push({ kind: 'gain', ch: c.id }, { kind: 'delay', ch: c.id }, { kind: 'phase', ch: c.id }, { kind: 'mute', ch: c.id },
+      { kind: 'xo', ch: c.id, hp: true }, { kind: 'xo', ch: c.id, hp: false }, { kind: 'route', ch: c.id });
+    c.eq.forEach((_, band) => all.push({ kind: 'eq', ch: c.id, band }));
+  }
+  return all;
+}
 
 export class TuningSession {
   state: TuningState;
   private listeners = new Set<() => void>();
   private queue: WriteQueue;
 
-  constructor(readonly driver: Driver, readonly deviceId: string | null) {
-    this.state = initialState(driver.profile);
+  constructor(readonly driver: Driver, readonly deviceId: string | null, readonly deviceName: string | null = null, scene?: Scene, private write?: Writer) {
+    this.state = initialState(driver.profile, scene && driver.profile.scenes.includes(scene) ? scene : driver.profile.scenes[0]);
     this.queue = new WriteQueue(f => this.transmit(f), (f, e) => captureLog.add('err', `ส่ง ${f.label} ไม่สำเร็จ: ${e instanceof Error ? e.message : e}`));
     this.queue.start();
   }
 
   get profile() { return this.driver.profile; }
   /** Real hardware is only written when the driver is mapped and a device is connected. */
-  get live() { return this.driver.mapped && !!this.driver.ble && !!this.deviceId; }
+  get live() { return this.driver.mapped && !!this.driver.ble && !!this.deviceId && !!this.write; }
 
   private async transmit(f: Frame) {
     if (this.live) {
       const t = this.driver.ble!;
-      await ble.write(this.deviceId!, t.service, t.write, f.bytes, t.withResponse);
+      await this.write!(this.deviceId!, t.service, t.write, f.bytes, t.withResponse);
       captureLog.add('tx', f.label, f.bytes, t.write);
     } else {
       captureLog.add('tx', `${f.label} (จำลอง)`, f.bytes);
@@ -77,13 +88,14 @@ export class TuningSession {
       s => ids.flatMap(ch => s.channels.find(c => c.id === ch)!.eq.map((_, band) => ({ kind: 'eq' as const, ch, band }))));
   }
 
+  /** Crossover edits pass through the speaker-protection guard (tweeter/midrange HPF floor). */
   setXover(chId: string, hp: boolean, patch: Partial<Xover>) {
     let ids: string[] = [];
     this.commit(s => {
       ids = this.withPair(s, chId, c => {
         const x = { ...(hp ? c.hpf : c.lpf), ...patch };
         x.freq = clamp(Math.round(x.freq), 20, 20000);
-        const fitted = fitXover(x, this.profile);
+        const fitted = guardXover(c.kind, hp, x, this.profile);
         if (hp) c.hpf = fitted; else c.lpf = fitted;
       });
     }, () => ids.map(ch => ({ kind: 'xo', ch, hp })));
@@ -91,7 +103,7 @@ export class TuningSession {
 
   setGain(chId: string, g: number) {
     const [lo, hi] = this.profile.channelGain; let ids: string[] = [];
-    this.commit(s => { ids = this.withPair(s, chId, c => { c.gain = clamp(g, lo, hi); }); }, () => ids.map(ch => ({ kind: 'gain', ch })));
+    this.commit(s => { ids = this.withPair(s, chId, c => { c.gain = +clamp(g, lo, hi).toFixed(2); }); }, () => ids.map(ch => ({ kind: 'gain', ch })));
   }
 
   /** Delay is always per side, even with L/R link on (time alignment differs left/right). */
@@ -138,32 +150,47 @@ export class TuningSession {
     this.commit(s => {
       const r = (s.route[chId] ??= []); const k = r.indexOf(input);
       if (k >= 0) r.splice(k, 1); else r.push(input);
+      r.sort((a, b) => a - b);
     }, () => [{ kind: 'route', ch: chId }]);
   }
 
-  sendAll() {
-    const s = this.state;
-    const all: Change[] = [{ kind: 'master' }, { kind: 'input' }];
-    for (const c of s.channels) {
-      all.push({ kind: 'gain', ch: c.id }, { kind: 'delay', ch: c.id }, { kind: 'phase', ch: c.id }, { kind: 'mute', ch: c.id },
-        { kind: 'xo', ch: c.id, hp: true }, { kind: 'xo', ch: c.id, hp: false }, { kind: 'route', ch: c.id });
-      c.eq.forEach((_, band) => all.push({ kind: 'eq', ch: c.id, band }));
-    }
-    for (const c of all) this.queue.push(this.driver.encode(c, s));
+  /** Switch installation / speaker layout. Rebuilds channels with safe defaults and pushes everything. */
+  setLayout(scene: Scene, layoutId: string) {
+    const l = layoutById(layoutId);
+    if (!l || l.scene !== scene || l.channels.length > this.profile.outputs) return;
+    const fresh = initialState(this.profile, scene, layoutId);
+    this.commit(s => {
+      Object.assign(s, { scene, layoutId, channels: fresh.channels, route: defaultRoute(fresh.channels, inputCount(this.profile, s.source)), distances: {} });
+    }, allChanges);
   }
+
+  /** Store distances and set every measured channel's delay from them. */
+  applyDistances(dist: Record<string, number>) {
+    const d = delaysFromDistances(this.state.channels, dist, this.profile);
+    this.commit(s => {
+      s.distances = { ...dist };
+      for (const c of s.channels) if (d[c.id]) c.delay = d[c.id].ms;
+    }, () => Object.keys(d).map(ch => ({ kind: 'delay' as const, ch })));
+  }
+
+  /**
+   * Replace the whole state (preset / last session). Rejects states from another model and
+   * re-applies the crossover guard so a stored preset can never bypass speaker protection.
+   */
+  loadState(st: TuningState): boolean {
+    if (!st || st.profileId !== this.profile.id || !Array.isArray(st.channels) || !layoutById(st.layoutId) || st.channels.length > this.profile.outputs) return false;
+    this.commit(s => {
+      Object.assign(s, JSON.parse(JSON.stringify(st)));
+      s.distances ??= {};
+      for (const c of s.channels) { c.hpf = guardXover(c.kind, true, c.hpf, this.profile); c.lpf = guardXover(c.kind, false, c.lpf, this.profile); }
+    }, allChanges);
+    return true;
+  }
+
+  sendAll() { for (const c of allChanges(this.state)) this.queue.push(this.driver.encode(c, this.state)); }
 
   dispose() { this.queue.stop(); this.listeners.clear(); }
 }
-
-let current: TuningSession | null = null;
-
-export function openSession(driver: Driver, deviceId: string | null): TuningSession {
-  if (current && current.driver.id === driver.id && current.deviceId === deviceId) return current;
-  current?.dispose();
-  current = new TuningSession(driver, deviceId);
-  return current;
-}
-export const currentSession = () => current;
 
 export function useSessionState(s: TuningSession): TuningState {
   return useSyncExternalStore(s.subscribe, s.getState);
