@@ -1,0 +1,40 @@
+{
+  "expo": {
+    "name": "OneTune DSP",
+    "slug": "onetune",
+    "version": "1.0.0",
+    "orientation": "portrait",
+    "icon": "./assets/icon.png",
+    "userInterfaceStyle": "dark",
+    "ios": {
+      "supportsTablet": true,
+      "infoPlist": {
+        "NSBluetoothAlwaysUsageDescription": "ใช้ Bluetooth เพื่อเชื่อมต่อและจูน DSP ในรถ"
+      }
+    },
+    "android": {
+      "adaptiveIcon": {
+        "backgroundColor": "#121A24",
+        "foregroundImage": "./assets/android-icon-foreground.png",
+        "backgroundImage": "./assets/android-icon-background.png",
+        "monochromeImage": "./assets/android-icon-monochrome.png"
+      },
+      "predictiveBackGestureEnabled": false,
+      "package": "com.onetune.dsp"
+    },
+    "web": {
+      "favicon": "./assets/favicon.png"
+    },
+    "plugins": [
+      "expo-router",
+      [
+        "react-native-ble-plx",
+        {
+          "isBackgroundEnabled": false,
+          "neverForLocation": false
+        }
+      ]
+    ],
+    "scheme": "onetune"
+  }
+}
