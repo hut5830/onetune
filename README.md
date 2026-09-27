@@ -2,11 +2,11 @@
 
 แอปเดียวสำหรับจูน DSP ของชุดลำโพง (ตู้แอคทีฟ 2/3 ทาง + ซับ) และเครื่องเสียงรถยนต์หลายยี่ห้อ (React Native + Expo SDK 57, TypeScript)
 
-## สถานะตอนนี้ (v1.2)
+## สถานะตอนนี้ (v1.3)
 
 | ส่วน | สถานะ |
 |---|---|
-| ค้นหาอุปกรณ์ BLE + ขอสิทธิ์ Android 12+ | ✅ ใช้กับเครื่องจริงได้ |
+| ค้นหาอุปกรณ์ BLE (เรดาร์ 3D: อุปกรณ์ที่เจอขึ้นเป็นหมุดตามความแรงสัญญาณ) + ขอสิทธิ์ Android 12+ + ขอเปิด Bluetooth จากในแอป | ✅ ใช้กับเครื่องจริงได้ |
 | BLE Inspector (ดู GATT, อ่าน, รับ notify, ส่ง hex, จดโน้ต, แชร์ log เป็น JSON) | ✅ ใช้กับเครื่องจริงได้ |
 | หน้าจูน: โหมดลำโพง (ภาพตู้ลำโพง) + โหมดรถ, เลือกการจัดวาง 2/3 ทาง/ซับ, EQ 31 แบนด์, PEQ ลากบนกราฟได้, ครอสโอเวอร์, เกน, ดีเลย์, เฟส, มิวท์, ลิงก์/คัดลอก L↔R, ปุ่มหมุน Master, พิมพ์ตัวเลขได้ทุกช่อง | ✅ ทำงานในโหมดจำลอง |
 | ป้องกันลำโพง: HPF ทวีตเตอร์ล็อก ≥ 1 kHz, เสียงกลาง ≥ 100 Hz, ≥ 12 dB/oct (ทั้งตอนปรับ โหลดพรีเซ็ต และเปลี่ยน layout) | ✅ มีเทสใน selftest |
@@ -57,6 +57,7 @@ src/
     writeQueue.ts      คิวส่งคำสั่ง รวมค่าที่ key ซ้ำ ส่งทีละตัวทุก 80 ms
     captureLog.ts      log ส่ง/รับ/โน้ต แชร์เป็น JSON
     permissions.ts     สิทธิ์ Android
+    power.ts           ขอเปิด Bluetooth (หน้าต่างระบบ Android) หรือเปิดหน้าตั้งค่า
   drivers/
     types.ts           CapabilityProfile, Driver, Change, Frame
     profiles.ts        สเปกแต่ละรุ่น + รูปแบบชื่อ advertise ที่ใช้จำเครื่อง
@@ -69,7 +70,7 @@ src/
     store.ts           AsyncStorage: พรีเซ็ต, ค่าครั้งก่อน, โหมดที่เลือก
     settings.ts        ค่าตั้งของแอป
   lib/                 hex/base64, biquad math, format
-  components/          SpeakerStage, CarView, ResponseGraph, EqBars, ChannelSheet, Knob, Slider, Radar, Icon, ui ...
+  components/          ScanStage (เรดาร์หน้าแรก), SpeakerStage, CarView, ResponseGraph, EqBars, ChannelSheet, Knob, Slider, Radar, Icon, ui ...
   theme.ts             โทนสีเทาเข้ม + สีฟ้าสีเดียว, ฟอนต์ IBM Plex Sans Thai (ไม่ใช้ไล่เฉด/เรืองแสง)
 docs/research.md       เทียบฟีเจอร์กับแอป DSP อื่น + สิ่งที่ยังขาด
 scripts/selftest.ts    ทดสอบ logic ใน Node

@@ -27,6 +27,8 @@ react-native-ble-plx, react-native-svg. Builds via EAS (account `hut5830`, proje
   Studio has simple mode (remote-style) and detailed mode; screens: align, inputs, presets, settings.
 - Session extras: undo/redo (edits of one control within 900 ms merge), A/B, solo, rename, copyTo, group level, limiter;
   whole-state jumps send only `diffChanges`. See docs/research.md for the feature comparison and backlog.
+- Home scan: `components/ScanStage.tsx` (tilted radar, floating orb = scan / turn-BT-on button, found devices as pins by RSSI);
+  `ble/power.ts` asks Android to enable Bluetooth via the REQUEST_ENABLE intent (expo-intent-launcher), falls back to settings.
 - `src/app/inspector.tsx` — BLE Inspector: GATT list, read, notify, write hex, notes, share log as JSON.
 
 ## Safety rules (keep)

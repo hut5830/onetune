@@ -11,8 +11,9 @@ import { store } from '../model/store';
 import { haptic } from '../lib/haptics';
 import { Icon, IconName } from '../components/Icon';
 import { Logo } from '../components/Logo';
-import { Radar } from '../components/Radar';
-import { Btn, Card, Chip, IconBtn, Note, Screen, SectionTitle, T, Toggle, useWide } from '../components/ui';
+import { Blip, ScanPhase, ScanStage } from '../components/ScanStage';
+import { turnOnBluetooth } from '../ble/power';
+import { Btn, Chip, IconBtn, Note, Screen, SectionTitle, T, Toggle, useWide } from '../components/ui';
 import { C, F, R, S, alpha } from '../theme';
 
 const SCAN_MS = 12000;
@@ -32,6 +33,8 @@ export default function Home() {
   const [btState, setBtState] = useState<string>('Unknown');
   const [namedOnly, setNamedOnly] = useState(true);
   const timer = useRef<ReturnType<typeof setTimeout> | null>(null);
+  /** Start scanning as soon as Bluetooth reports on after we asked Android to enable it. */
+  const scanWhenOn = useRef(false);
   const available = ble.available();
 
   useEffect(() => { void store.scene().then(setScene); }, []);
@@ -58,14 +61,41 @@ export default function Home() {
   };
   const openInspector = (h: ScanHit) => { stop(); router.push({ pathname: '/inspector', params: { id: h.id, name: h.name ?? '' } }); };
   const btOk = available && btState === State.PoweredOn;
+  const phase: ScanPhase = !available ? 'unavailable' : btState === State.PoweredOff ? 'off' : scanning ? 'scanning' : 'idle';
+  useEffect(() => { if (btState === State.PoweredOn && scanWhenOn.current) { scanWhenOn.current = false; void scan(); } }, [btState]);
+  const powerOn = async () => {
+    setError(null);
+    const r = await turnOnBluetooth();
+    if (r === 'on' || r === 'settings') scanWhenOn.current = true;
+    if (r === 'on') haptic.ok();
+    if (r === 'no-permission') { setError('ต้องอนุญาตให้แอปใช้ Bluetooth ก่อน (กดอนุญาตในหน้าต่างที่เด้งขึ้น)'); haptic.warn(); }
+  };
+  const onCore = () => { if (phase === 'off') void powerOn(); else if (scanning) stop(); else void scan(); };
+  const blips: Blip[] = list.slice(0, 12).map(h => {
+    const p = matchProfile(h.name);
+    return { id: h.id, name: h.name, rssi: h.rssi, tone: p ? (driverFor(p.id)?.mapped ? 'ok' : 'known') : 'unknown' };
+  });
+  const openHit = (id: string) => { const h = hits[id]; if (!h) return; const p = matchProfile(h.name); if (p) openTune(p, h); else openInspector(h); };
   const btLabel = !available ? 'Bluetooth ใช้ไม่ได้ในแอปรุ่นนี้' : btState === State.PoweredOn ? 'Bluetooth พร้อม' : btState === State.PoweredOff ? 'Bluetooth ปิดอยู่' : `Bluetooth: ${btState}`;
 
   const intro = (
     <View style={{ gap: S.md }}>
-      <View style={{ gap: 2, marginTop: S.sm }}>
-        <T v="display">จูนเสียงให้ลงตัว</T>
-        <T v="body">EQ ครอสโอเวอร์ ดีเลย์ และพรีเซ็ต สำหรับชุดลำโพงและเครื่องเสียงรถ</T>
+      <ScanStage phase={phase} blips={blips} found={list.length} onCore={onCore} onBlip={openHit} />
+      <T v="small" style={{ textAlign: 'center', marginTop: -S.sm }}>
+        {phase === 'off' ? 'แอปจะขอเปิด Bluetooth ให้ แล้วเริ่มค้นหาต่อทันที'
+          : scene === 'speaker' ? 'เปิดเครื่องลำโพง/DSP ไว้ใกล้มือถือ · ยิ่งใกล้กลางจอ สัญญาณยิ่งแรง' : 'เปิดกุญแจรถ (ACC) ให้ DSP ทำงาน · ยิ่งใกล้กลางจอ สัญญาณยิ่งแรง'}
+      </T>
+      <View style={s.btRow}>
+        {phase === 'off'
+          ? <Btn small kind="primary" icon="bluetooth" label="เปิด Bluetooth" onPress={() => void powerOn()} />
+          : <Btn small kind={scanning ? 'default' : 'primary'} icon={scanning ? 'pause' : 'radar'} label={scanning ? 'หยุด' : 'ค้นหา'} onPress={onCore} disabled={!available} />}
+        <View style={[s.btDot, { backgroundColor: btOk ? C.ok : C.warn }]} />
+        <T v="small" style={{ flex: 1 }} numberOfLines={1}>{btLabel}</T>
+        <T v="small">มีชื่อ</T>
+        <Toggle value={namedOnly} onChange={setNamedOnly} label="แสดงเฉพาะอุปกรณ์ที่มีชื่อ" />
       </View>
+      {error && <Note icon="warn" color={C.danger}>{error}</Note>}
+      {!available && <Note icon="info" color={C.warn}>Expo Go และเว็บไม่มี Bluetooth ต้องใช้ APK · ระหว่างนี้ลองจูนแบบไม่ต่อเครื่องได้</Note>}
       <View style={s.scenes}>
         {SCENES.map(x => {
           const on = x.id === scene;
@@ -80,24 +110,6 @@ export default function Home() {
           );
         })}
       </View>
-      <Card style={{ gap: S.md }}>
-        <View style={{ flexDirection: 'row', alignItems: 'center', gap: S.lg }}>
-          <Radar active={scanning} size={96} />
-          <View style={{ flex: 1, gap: 2 }}>
-            <T v="h">{scanning ? 'กำลังค้นหา…' : list.length ? `พบ ${list.length} อุปกรณ์` : 'เชื่อมต่อเครื่อง'}</T>
-            <T v="small">{scene === 'speaker' ? 'เปิดเครื่องลำโพง/DSP ไว้ใกล้มือถือ แล้วกดค้นหา' : 'เปิดกุญแจรถ (ACC) ให้ DSP ทำงาน แล้วกดค้นหา'}</T>
-          </View>
-        </View>
-        <Btn kind={scanning ? 'default' : 'primary'} icon={scanning ? 'pause' : 'bluetooth'} label={scanning ? 'หยุดค้นหา' : 'ค้นหาอุปกรณ์'} onPress={scanning ? stop : () => void scan()} disabled={!available} />
-        <View style={s.btRow}>
-          <View style={[s.btDot, { backgroundColor: btOk ? C.ok : C.warn }]} />
-          <T v="small" style={{ flex: 1 }}>{btLabel}</T>
-          <T v="small">เฉพาะที่มีชื่อ</T>
-          <Toggle value={namedOnly} onChange={setNamedOnly} label="แสดงเฉพาะอุปกรณ์ที่มีชื่อ" />
-        </View>
-        {error && <Note icon="warn" color={C.danger}>{error}</Note>}
-        {!available && <Note icon="info" color={C.warn}>Expo Go และเว็บไม่มี Bluetooth ต้องใช้ APK · ระหว่างนี้ลองจูนแบบไม่ต่อเครื่องได้</Note>}
-      </Card>
     </View>
   );
 

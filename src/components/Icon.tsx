@@ -10,6 +10,7 @@ const P = {
   settings: c => <><Circle cx={12} cy={12} r={3.2} stroke={c} /><Path d="M12 2.5v3M12 18.5v3M2.5 12h3M18.5 12h3M5.3 5.3l2.1 2.1M16.6 16.6l2.1 2.1M5.3 18.7l2.1-2.1M16.6 7.4l2.1-2.1" stroke={c} /></>,
   compare: c => <><Rect x={3} y={5} width={18} height={14} rx={3} stroke={c} /><Path d="M12 5v14" stroke={c} /></>,
   home: c => <Path d="M4 11l8-7 8 7v9a1 1 0 01-1 1h-5v-6h-4v6H5a1 1 0 01-1-1z" stroke={c} />,
+  bluetoothOff: c => <Path d="M7 7l10 10-5 4V3l5 4-2.5 2M4 4l16 16" stroke={c} />,
   back: c => <Path d="M15 5l-7 7 7 7" stroke={c} />,
   close: c => <Path d="M6 6l12 12M18 6L6 18" stroke={c} />,
   chevron: c => <Path d="M9 5l7 7-7 7" stroke={c} />,
