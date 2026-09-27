@@ -21,8 +21,12 @@ react-native-ble-plx, react-native-svg. Builds via EAS (account `hut5830`, proje
 - `src/model/tuning.ts` — channel defs, LAYOUTS per scene (output order = OUT 1…N), safe defaults, `guardXover` (MIN_HPF), delays from distances.
 - `src/model/session.ts` — tuning state, L/R link (delay never linked), copy-to-pair, layouts, presets, sends via `WriteQueue`
   (coalesces by frame key, one write at a time, 80 ms). BLE writer is injected (`src/model/current.ts`) so it runs in Node tests.
-- UI: `src/theme.ts` tokens (dark neon, Chakra Petch + IBM Plex Sans Thai), own SVG icons in `components/Icon.tsx`,
-  custom headers (Stack headerShown false). SVG gradient ids must be per-instance (`useSvgId`). Tool screens: align, inputs, presets.
+- UI: `src/theme.ts` calm flat graphite + one blue accent (no gradients/glows — user asked for simple, easy on the eyes),
+  IBM Plex Sans Thai, own SVG icons in `components/Icon.tsx`, custom headers (Stack headerShown false).
+  Landscape/tablet: `useWide()` switches studio and channel editor to two panes; `Page` caps width. SVG ids per instance (`useSvgId`).
+  Studio has simple mode (remote-style) and detailed mode; screens: align, inputs, presets, settings.
+- Session extras: undo/redo (edits of one control within 900 ms merge), A/B, solo, rename, copyTo, group level, limiter;
+  whole-state jumps send only `diffChanges`. See docs/research.md for the feature comparison and backlog.
 - `src/app/inspector.tsx` — BLE Inspector: GATT list, read, notify, write hex, notes, share log as JSON.
 
 ## Safety rules (keep)
@@ -43,8 +47,9 @@ react-native-ble-plx, react-native-svg. Builds via EAS (account `hut5830`, proje
 3. Write the first real driver, verify each command with hex via Inspector, then set `mapped: true`.
 4. Direction under consideration: data-driven drivers (JSON protocol definitions loaded at runtime) plus a tool that
    proposes a protocol from a capture + change timeline, so new models need no code change.
-5. Done in v1.1: speaker scene + layouts, inputs/routing, presets (+JSON share), time alignment. Still open: which speaker DSP
-   models the user owns (add profiles), unused OUTs should be muted by real drivers, 3D view, expo-updates for OTA.
+5. Done in v1.1/v1.2: speaker scene + layouts, inputs/routing, presets, time alignment, simple mode, undo/A-B/solo, limiter,
+   landscape. Backlog in docs/research.md (phone-mic RTA/auto-tune, compressor/gate, on-device preset slots, lock, OTA).
+   Unused OUTs should be muted by real drivers.
 6. Web preview for design checks: `npx expo start --web` (no BLE on web).
 
 ## Checks before declaring work done

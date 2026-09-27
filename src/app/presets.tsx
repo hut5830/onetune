@@ -1,6 +1,5 @@
 import { useCallback, useEffect, useState } from 'react';
-import { ScrollView, Share, StyleSheet, Text, TextInput, View } from 'react-native';
-import { useSafeAreaInsets } from 'react-native-safe-area-context';
+import { Share, StyleSheet, Text, TextInput, View } from 'react-native';
 import { useSessionState, TuningSession } from '../model/session';
 import { currentSession } from '../model/current';
 import { Preset, store } from '../model/store';
@@ -9,8 +8,9 @@ import { haptic } from '../lib/haptics';
 import { Icon } from '../components/Icon';
 import { NoSession } from '../components/NoSession';
 import { useToast } from '../components/Toast';
-import { Btn, Card, Chip, Header, IconBtn, Screen, SectionTitle, T, st } from '../components/ui';
-import { C, F, R, S, alpha } from '../theme';
+import { useAskText } from '../components/NumberPrompt';
+import { Btn, Card, Chip, Header, IconBtn, Page, Screen, SectionTitle, T, st } from '../components/ui';
+import { C, F, R, S } from '../theme';
 
 export default function Presets() {
   const s = currentSession();
@@ -21,7 +21,7 @@ function PresetsInner({ session }: { session: TuningSession }) {
   const state = useSessionState(session);
   const p = session.profile;
   const toast = useToast();
-  const inset = useSafeAreaInsets();
+  const askText = useAskText();
   const [list, setList] = useState<Preset[]>([]);
   const [name, setName] = useState('');
   const [confirm, setConfirm] = useState<string | null>(null);
@@ -44,39 +44,39 @@ function PresetsInner({ session }: { session: TuningSession }) {
   const doImport = async () => {
     try {
       const j = JSON.parse(raw) as { onetune?: number; name?: string; state?: TuningState };
-      if (!j.state || j.state.profileId !== p.id) { toast(j.state ? `พรีเซ็ตนี้เป็นของรุ่นอื่น (${j.state.profileId})` : 'ไม่ใช่ไฟล์พรีเซ็ต OneTune', 'warn'); return; }
+      if (!j.state || j.state.profileId !== p.id) { toast(j.state ? `พรีเซ็ตนี้เป็นของรุ่นอื่น (${j.state.profileId})` : 'ไม่ใช่พรีเซ็ตของ OneTune', 'warn'); return; }
       await store.savePreset(j.name ?? 'นำเข้า', j.state);
       setRaw(''); setImporting(false); haptic.ok(); toast('นำเข้าพรีเซ็ตแล้ว'); reload();
-    } catch { toast('อ่านข้อความไม่ได้ ต้องเป็น JSON ที่แชร์จาก OneTune', 'warn'); }
+    } catch { toast('อ่านข้อความไม่ได้ ต้องเป็นข้อความที่แชร์จาก OneTune', 'warn'); }
   };
 
   return (
     <Screen>
       <Header title="พรีเซ็ต" sub={`${p.brand} ${p.model}`} right={<IconBtn name="input" label="นำเข้าพรีเซ็ต" active={importing} onPress={() => setImporting(v => !v)} />} />
-      <ScrollView contentContainerStyle={{ paddingHorizontal: S.lg, paddingBottom: inset.bottom + 40, gap: S.md }} keyboardShouldPersistTaps="handled">
-        <Card glow={C.violet}>
-          <T v="label">บันทึกค่าปัจจุบัน</T>
+      <Page keyboardShouldPersistTaps="handled">
+        <Card>
+          <T v="h">บันทึกเสียงตอนนี้</T>
           <View style={[st.row, { gap: S.sm }]}>
-            <TextInput value={name} onChangeText={setName} onSubmitEditing={() => void save()} placeholder="ตั้งชื่อ เช่น ร้องเพลง, ฟังเพลงเบา" placeholderTextColor={C.faint}
-              style={s.input} accessibilityLabel="ชื่อพรีเซ็ต" selectionColor={C.violet} />
-            <Btn kind="hot" icon="save" label="บันทึก" onPress={() => void save()} />
+            <TextInput value={name} onChangeText={setName} onSubmitEditing={() => void save()} placeholder="ตั้งชื่อ เช่น ฟังเพลงเบาๆ, ปาร์ตี้" placeholderTextColor={C.faint}
+              style={s.input} accessibilityLabel="ชื่อพรีเซ็ต" selectionColor={C.accent} />
+            <Btn kind="primary" icon="save" label="บันทึก" onPress={() => void save()} />
           </View>
-          <T v="small">{layoutById(state.layoutId)?.name} · {state.channels.length} ช่อง · Master {state.master} dB</T>
+          <T v="small">{layoutById(state.layoutId)?.name} · {state.channels.length} ช่อง · ระดับเสียงรวม {state.master} dB</T>
         </Card>
 
         {importing && (
           <Card>
-            <T v="label">นำเข้าจากข้อความ</T>
-            <TextInput value={raw} onChangeText={setRaw} multiline placeholder='วาง JSON ที่แชร์มา เช่น {"onetune":1,...}' placeholderTextColor={C.faint} style={[s.input, { minHeight: 90, textAlignVertical: 'top' }]} accessibilityLabel="JSON พรีเซ็ต" />
-            <Btn kind="primary" icon="check" label="นำเข้า" onPress={() => void doImport()} disabled={!raw.trim()} />
+            <T v="h">นำเข้าจากข้อความ</T>
+            <TextInput value={raw} onChangeText={setRaw} multiline placeholder="วางข้อความพรีเซ็ตที่เพื่อนแชร์มา" placeholderTextColor={C.faint} style={[s.input, { minHeight: 90, textAlignVertical: 'top' }]} accessibilityLabel="ข้อความพรีเซ็ต" />
+            <Btn kind="primary" label="นำเข้า" onPress={() => void doImport()} disabled={!raw.trim()} />
           </Card>
         )}
 
         <SectionTitle label="พรีเซ็ตที่บันทึกไว้" right={<T v="small">{list.length} รายการ</T>} />
         {list.length === 0 && (
           <View style={s.empty}>
-            <Icon name="layers" size={34} color={C.faint} />
-            <T v="small" style={{ textAlign: 'center' }}>ยังไม่มีพรีเซ็ตของรุ่นนี้{'\n'}จูนเสร็จแล้วตั้งชื่อแล้วกดบันทึก</T>
+            <Icon name="layers" size={32} color={C.faint} />
+            <T v="small" style={{ textAlign: 'center' }}>ยังไม่มีพรีเซ็ตของรุ่นนี้{'\n'}จูนเสร็จแล้วตั้งชื่อ แล้วกดบันทึก</T>
           </View>
         )}
         {list.map(pr => {
@@ -84,35 +84,34 @@ function PresetsInner({ session }: { session: TuningSession }) {
           return (
             <Card key={pr.id} style={{ gap: S.sm }}>
               <View style={st.row}>
-                <View style={s.badge}><Icon name={pr.state.scene === 'car' ? 'car' : 'speaker'} size={18} color={C.violet} /></View>
                 <View style={{ flex: 1 }}>
                   <Text style={s.name} numberOfLines={1}>{pr.name}</Text>
                   <T v="small" numberOfLines={1}>{new Date(pr.savedAt).toLocaleString('th-TH', { dateStyle: 'medium', timeStyle: 'short' })}</T>
                 </View>
-                <IconBtn name="share" size={34} label={`แชร์ ${pr.name}`} onPress={() => share(pr)} />
+                <IconBtn name="edit" size={36} label={`เปลี่ยนชื่อ ${pr.name}`} onPress={() => askText({ title: 'เปลี่ยนชื่อพรีเซ็ต', value: pr.name, onSet: async v => { if (v) { await store.renamePreset(pr.id, v); reload(); } } })} />
+                <IconBtn name="share" size={36} label={`แชร์ ${pr.name}`} onPress={() => share(pr)} />
               </View>
               <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: 6 }}>
-                {l && <Chip label={l.name} color={C.cyan} />}
-                <Chip label={`Master ${pr.state.master} dB`} />
+                {l && <Chip label={l.name} color={C.accent} />}
+                <Chip label={`${pr.state.master} dB`} />
               </View>
               <View style={[st.row, { gap: S.sm }]}>
-                <Btn small kind="primary" icon="play" label="โหลด" onPress={() => load(pr)} style={{ flex: 1 }} />
-                <Btn small icon="save" label="เขียนทับ" onPress={async () => { await store.overwritePreset(pr.id, state); haptic.ok(); toast(`เขียนทับ "${pr.name}" ด้วยค่าปัจจุบันแล้ว`); reload(); }} style={{ flex: 1 }} />
+                <Btn small kind="primary" label="โหลด" onPress={() => load(pr)} style={{ flex: 1 }} />
+                <Btn small label="บันทึกทับ" onPress={async () => { await store.overwritePreset(pr.id, state); haptic.ok(); toast(`บันทึกทับ "${pr.name}" แล้ว`); reload(); }} style={{ flex: 1 }} />
                 {confirm === pr.id
-                  ? <Btn small kind="danger" icon="trash" label="ยืนยันลบ" onPress={async () => { await store.deletePreset(pr.id); setConfirm(null); haptic.warn(); reload(); }} />
+                  ? <Btn small kind="danger" label="ยืนยันลบ" onPress={async () => { await store.deletePreset(pr.id); setConfirm(null); haptic.warn(); reload(); }} />
                   : <IconBtn name="trash" size={36} label={`ลบ ${pr.name}`} color={C.danger} onPress={() => setConfirm(pr.id)} />}
               </View>
             </Card>
           );
         })}
-      </ScrollView>
+      </Page>
     </Screen>
   );
 }
 
 const s = StyleSheet.create({
-  input: { flex: 1, fontFamily: F.body, backgroundColor: alpha(C.bg, 0.7), borderWidth: 1, borderColor: C.line2, borderRadius: R.md, paddingHorizontal: 14, paddingVertical: 11, color: C.ink, fontSize: 14.5 },
+  input: { flex: 1, fontFamily: F.regular, backgroundColor: C.panel2, borderRadius: R.md, paddingHorizontal: 14, paddingVertical: 11, color: C.ink, fontSize: 14.5 },
   empty: { alignItems: 'center', gap: S.sm, padding: S.xl, borderRadius: R.lg, borderWidth: 1, borderStyle: 'dashed', borderColor: C.line2 },
-  badge: { width: 38, height: 38, borderRadius: 12, alignItems: 'center', justifyContent: 'center', backgroundColor: alpha(C.violet, 0.12), borderWidth: 1, borderColor: alpha(C.violet, 0.4) },
-  name: { fontFamily: F.head, fontSize: 16, color: C.ink, lineHeight: 22 },
+  name: { fontFamily: F.semi, fontSize: 16, color: C.ink, lineHeight: 23 },
 });

@@ -1,4 +1,4 @@
-import { CapabilityProfile, Scene, SourceId, XoType } from '../drivers/types';
+import { CapabilityProfile, Change, Scene, SourceId, XoType } from '../drivers/types';
 import { clamp } from '../lib/format';
 
 export const ISO = [20, 25, 31.5, 40, 50, 63, 80, 100, 125, 160, 200, 250, 315, 400, 500, 630, 800, 1000, 1250, 1600, 2000, 2500, 3150, 4000, 5000, 6300, 8000, 10000, 12500, 16000, 20000];
@@ -10,7 +10,12 @@ export interface Xover { on: boolean; freq: number; slope: number; type: XoType 
 export type Kind = 'tw' | 'mr' | 'mid' | 'lf' | 'full' | 'ctr' | 'rr' | 'sub';
 
 export interface ChannelDef { id: string; name: string; short: string; group: string; pair: string | null; side: 0 | 1 | 2; kind: Kind; rear?: boolean }
-export interface Channel extends ChannelDef { color: string; hpf: Xover; lpf: Xover; gain: number; delay: number; phase: boolean; mute: boolean; eqBypass: boolean; eq: Band[] }
+export interface Limiter { on: boolean; threshold: number }
+/** `custom` is the user's own name for the output (shown instead of `name` when set). */
+export interface Channel extends ChannelDef { color: string; hpf: Xover; lpf: Xover; gain: number; delay: number; phase: boolean; mute: boolean; eqBypass: boolean; eq: Band[]; limiter: Limiter; custom?: string }
+
+export const chName = (c: Channel) => c.custom?.trim() || c.name;
+export const LIMIT_RANGE: [number, number] = [-30, 0];
 
 export interface TuningState {
   profileId: string;
@@ -26,8 +31,19 @@ export interface TuningState {
 }
 
 export const KIND_COLOR: Record<Kind, string> = {
-  tw: '#2EE6FF', mr: '#B8FF5A', mid: '#FFB23F', lf: '#FFB23F', full: '#6FA8FF', ctr: '#3DF5C8', rr: '#A98BFF', sub: '#FF4F8B',
+  tw: '#5AB0FF', mr: '#6FCF97', mid: '#F2B35A', lf: '#F2B35A', full: '#8F9BFF', ctr: '#56C9C1', rr: '#B39DDB', sub: '#EF7B7B',
 };
+
+/** Level groups for the simple (remote-style) screen. */
+export const GROUPS: { id: string; name: string; kinds: Kind[] }[] = [
+  { id: 'hf', name: 'เสียงแหลม', kinds: ['tw'] },
+  { id: 'mf', name: 'เสียงกลาง', kinds: ['mr', 'ctr'] },
+  { id: 'lf', name: 'เสียงต่ำ', kinds: ['lf', 'mid'] },
+  { id: 'full', name: 'ลำโพงหลัก', kinds: ['full'] },
+  { id: 'rr', name: 'ลำโพงหลัง', kinds: ['rr'] },
+  { id: 'sub', name: 'ซับ', kinds: ['sub'] },
+];
+export const groupOf = (k: Kind) => GROUPS.find(g => g.kinds.includes(k))!;
 export const KIND_NAME: Record<Kind, string> = {
   tw: 'ทวีตเตอร์', mr: 'เสียงกลาง', mid: 'มิดเบส', lf: 'วูฟเฟอร์', full: 'ฟูลเรนจ์', ctr: 'เซ็นเตอร์', rr: 'ลำโพงหลัง', sub: 'ซับวูฟเฟอร์',
 };
@@ -151,7 +167,7 @@ export function buildChannels(p: CapabilityProfile, layout: LayoutDef): Channel[
     return {
       ...d, color: KIND_COLOR[d.kind],
       hpf: guardXover(d.kind, true, xo(x.hp), p), lpf: guardXover(d.kind, false, xo(x.lp), p),
-      gain: clamp(x.gain, p.channelGain[0], p.channelGain[1]), delay: 0, phase: false, mute: false, eqBypass: false,
+      gain: clamp(x.gain, p.channelGain[0], p.channelGain[1]), delay: 0, phase: false, mute: false, eqBypass: false, limiter: { on: false, threshold: -6 },
       eq: ISO.map(f => ({ f, g: 0, q: 4.32, t: 'pk' as BandType })),
     };
   });
@@ -193,6 +209,30 @@ export function delaysFromDistances(channels: Channel[], dist: Record<string, nu
     const raw = (far - dist[c.id]) / CM_PER_MS;
     const ms = +clamp(Math.round(raw / p.delayStep) * p.delayStep, p.delayMs[0], p.delayMs[1]).toFixed(4);
     out[c.id] = { ms, clipped: raw > p.delayMs[1] + p.delayStep / 2 };
+  }
+  return out;
+}
+
+const same = (a: unknown, b: unknown) => JSON.stringify(a) === JSON.stringify(b);
+
+/** Minimal set of changes that turns device state `a` into `b` (used by undo/redo, A/B and preset loading). */
+export function diffChanges(a: TuningState, b: TuningState, p: CapabilityProfile): Change[] {
+  const out: Change[] = [];
+  if (a.master !== b.master) out.push({ kind: 'master' });
+  if (a.source !== b.source) out.push({ kind: 'input' });
+  const limiter = p.extras.includes('limiter');
+  for (const c of b.channels) {
+    const o = a.channels.find(x => x.id === c.id);
+    const ch = c.id;
+    if (!o || o.gain !== c.gain) out.push({ kind: 'gain', ch });
+    if (!o || o.delay !== c.delay) out.push({ kind: 'delay', ch });
+    if (!o || o.phase !== c.phase) out.push({ kind: 'phase', ch });
+    if (!o || o.mute !== c.mute) out.push({ kind: 'mute', ch });
+    if (!o || !same(o.hpf, c.hpf)) out.push({ kind: 'xo', ch, hp: true });
+    if (!o || !same(o.lpf, c.lpf)) out.push({ kind: 'xo', ch, hp: false });
+    if (!o || !same(a.route[ch], b.route[ch])) out.push({ kind: 'route', ch });
+    if (limiter && (!o || !same(o.limiter, c.limiter))) out.push({ kind: 'limiter', ch });
+    c.eq.forEach((band, i) => { if (!o || o.eqBypass !== c.eqBypass || !same(o.eq[i], band)) out.push({ kind: 'eq', ch, band: i }); });
   }
   return out;
 }

@@ -2,7 +2,7 @@
 
 แอปเดียวสำหรับจูน DSP ของชุดลำโพง (ตู้แอคทีฟ 2/3 ทาง + ซับ) และเครื่องเสียงรถยนต์หลายยี่ห้อ (React Native + Expo SDK 57, TypeScript)
 
-## สถานะตอนนี้ (v1.1 · ดีไซน์ใหม่)
+## สถานะตอนนี้ (v1.2)
 
 | ส่วน | สถานะ |
 |---|---|
@@ -12,6 +12,7 @@
 | ป้องกันลำโพง: HPF ทวีตเตอร์ล็อก ≥ 1 kHz, เสียงกลาง ≥ 100 Hz, ≥ 12 dB/oct (ทั้งตอนปรับ โหลดพรีเซ็ต และเปลี่ยน layout) | ✅ มีเทสใน selftest |
 | Capability profile ต่อรุ่น (NDSK4265AU, PXE-R500, DSPA 810 Pro, AXDSP-X) | ✅ ตามสเปก บางค่ารอยืนยัน |
 | ไดรเวอร์จริงของแต่ละยี่ห้อ | ⏳ รอดักแพ็กเก็ตจากเครื่องจริง |
+| โหมดใช้งานง่าย (ระดับเสียงรวม, ระดับแต่ละส่วน, ซับ, แหล่งเสียง, พรีเซ็ต) + โหมดปรับละเอียด · ย้อนกลับ/ทำซ้ำ · เทียบ A/B · โซโล่ · ตั้งชื่อช่อง · คัดลอกไปช่องไหนก็ได้ · ลิมิตเตอร์ · แนวนอน/แท็บเล็ต | ✅ ทำงานในโหมดจำลอง |
 | หน้าสัญญาณเข้า / routing, พรีเซ็ต (บันทึก/โหลด/แชร์ JSON), Time Alignment จากระยะ, จำค่าครั้งก่อน | ✅ ทำงานในโหมดจำลอง |
 
 **ความปลอดภัย:** ไดรเวอร์ที่ยัง `mapped: false` จะไม่เขียนอะไรลงเครื่องจริงเด็ดขาด คำสั่งไปอยู่ใน log อย่างเดียว
@@ -48,6 +49,7 @@ src/
     align.tsx          Time Alignment จากระยะ
     inputs.tsx         แหล่งเสียง + routing matrix
     presets.tsx        พรีเซ็ต บันทึก/โหลด/แชร์/นำเข้า
+    settings.tsx       ตั้งค่า: โหมดเริ่มต้น, สั่น, เปิดหน้าจอค้าง
     inspector.tsx      BLE Inspector / log
   ble/
     client.ts          ห่อ react-native-ble-plx (scan, connect, MTU, read, write, notify)
@@ -65,9 +67,11 @@ src/
     session.ts         สถานะการจูน + ลิงก์ L/R + ส่งผ่านคิว (ไม่ผูกกับ BLE โดยตรง ทดสอบใน Node ได้)
     current.ts         session ปัจจุบันที่หน้าเครื่องมือใช้ร่วมกัน
     store.ts           AsyncStorage: พรีเซ็ต, ค่าครั้งก่อน, โหมดที่เลือก
+    settings.ts        ค่าตั้งของแอป
   lib/                 hex/base64, biquad math, format
   components/          SpeakerStage, CarView, ResponseGraph, EqBars, ChannelSheet, Knob, Slider, Radar, Icon, ui ...
-  theme.ts             โทนสี/ฟอนต์ (Chakra Petch + IBM Plex Sans Thai)
+  theme.ts             โทนสีเทาเข้ม + สีฟ้าสีเดียว, ฟอนต์ IBM Plex Sans Thai (ไม่ใช้ไล่เฉด/เรืองแสง)
+docs/research.md       เทียบฟีเจอร์กับแอป DSP อื่น + สิ่งที่ยังขาด
 scripts/selftest.ts    ทดสอบ logic ใน Node
 ```
 

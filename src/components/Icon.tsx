@@ -4,6 +4,12 @@ import { C } from '../theme';
 
 // Line icons drawn on a 24×24 grid (1.8 stroke) so the whole app shares one visual weight.
 const P = {
+  undo: c => <Path d="M9 14L4 9l5-5M4 9h10.5a5.5 5.5 0 010 11H11" stroke={c} />,
+  redo: c => <Path d="M15 14l5-5-5-5M20 9H9.5a5.5 5.5 0 000 11H13" stroke={c} />,
+  solo: c => <><Path d="M4 15v-3a8 8 0 0116 0v3" stroke={c} /><Rect x={3} y={14} width={4.5} height={7} rx={1.8} stroke={c} /><Rect x={16.5} y={14} width={4.5} height={7} rx={1.8} stroke={c} /></>,
+  settings: c => <><Circle cx={12} cy={12} r={3.2} stroke={c} /><Path d="M12 2.5v3M12 18.5v3M2.5 12h3M18.5 12h3M5.3 5.3l2.1 2.1M16.6 16.6l2.1 2.1M5.3 18.7l2.1-2.1M16.6 7.4l2.1-2.1" stroke={c} /></>,
+  compare: c => <><Rect x={3} y={5} width={18} height={14} rx={3} stroke={c} /><Path d="M12 5v14" stroke={c} /></>,
+  home: c => <Path d="M4 11l8-7 8 7v9a1 1 0 01-1 1h-5v-6h-4v6H5a1 1 0 01-1-1z" stroke={c} />,
   back: c => <Path d="M15 5l-7 7 7 7" stroke={c} />,
   close: c => <Path d="M6 6l12 12M18 6L6 18" stroke={c} />,
   chevron: c => <Path d="M9 5l7 7-7 7" stroke={c} />,

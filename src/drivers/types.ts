@@ -1,7 +1,7 @@
 export type XoType = 'LR' | 'BW' | 'BE';
 export type SourceId = 'hl' | 'rca' | 'opt' | 'bt' | 'usb';
 export type Family = 'tiger' | 'chs' | 'own' | 'demo';
-export type Extra = 'navi' | 'lock' | 'presets6' | 'phaseRot' | 'allpass' | 'chime';
+export type Extra = 'navi' | 'lock' | 'presets6' | 'phaseRot' | 'allpass' | 'chime' | 'limiter';
 /** Where the DSP is installed: a standalone speaker system or a car. Drives layouts, defaults and visuals. */
 export type Scene = 'speaker' | 'car';
 
@@ -34,7 +34,7 @@ export interface CapabilityProfile {
 export type Change =
   | { kind: 'eq'; ch: string; band: number }
   | { kind: 'xo'; ch: string; hp: boolean }
-  | { kind: 'gain' | 'delay' | 'phase' | 'mute' | 'route'; ch: string }
+  | { kind: 'gain' | 'delay' | 'phase' | 'mute' | 'route' | 'limiter'; ch: string }
   | { kind: 'master' | 'input' };
 
 export interface Frame {

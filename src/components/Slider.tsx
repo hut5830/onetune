@@ -1,6 +1,5 @@
 import { useRef, useState } from 'react';
 import { LayoutChangeEvent, PanResponder, StyleSheet, View } from 'react-native';
-import { LinearGradient } from 'expo-linear-gradient';
 import { clamp } from '../lib/format';
 import { haptic } from '../lib/haptics';
 import { C, alpha } from '../theme';
@@ -17,12 +16,13 @@ interface Props {
   origin?: number;
   disabled?: boolean;
   label: string;
+  /** Taller track for the simple screen. */
+  big?: boolean;
 }
 
-const H = 34, TRACK = 6, THUMB = 22;
-
 /** Horizontal drag slider with linear or logarithmic (frequency) scale. */
-export function Slider({ value, min, max, onChange, scale = 'lin', step, color = C.cyan, floor, origin, disabled, label }: Props) {
+export function Slider({ value, min, max, onChange, scale = 'lin', step, color = C.accent, floor, origin, disabled, label, big }: Props) {
+  const H = big ? 44 : 34, TRACK = big ? 10 : 6, THUMB = big ? 28 : 22;
   const [w, setW] = useState(0);
   const start = useRef({ x: 0, last: value });
   const toPos = (v: number) => {
@@ -39,6 +39,8 @@ export function Slider({ value, min, max, onChange, scale = 'lin', step, color =
     const v = toVal(x);
     if (v !== start.current.last) { start.current.last = v; onChange(v); }
   };
+  const emitRef = useRef(emit);
+  emitRef.current = emit;
   const pr = useRef(PanResponder.create({
     onStartShouldSetPanResponder: () => true,
     onMoveShouldSetPanResponder: () => true,
@@ -47,8 +49,6 @@ export function Slider({ value, min, max, onChange, scale = 'lin', step, color =
     onPanResponderMove: (_, g) => emitRef.current(start.current.x + g.dx),
     onPanResponderRelease: () => haptic.tick(),
   })).current;
-  const emitRef = useRef(emit);
-  emitRef.current = emit;
 
   const pos = w ? toPos(value) : 0;
   const o = w ? toPos(clamp(origin ?? min, min, max)) : 0;
@@ -65,31 +65,21 @@ export function Slider({ value, min, max, onChange, scale = 'lin', step, color =
         onChange(clamp(v, floor ?? min, max));
       }}>
       <View style={StyleSheet.absoluteFill} pointerEvents="none">
-      <View style={s.track} />
-      {floor !== undefined && w > 0 && (
-        <View style={[s.floor, { width: floorX }]}>
-          {Array.from({ length: Math.ceil(floorX / 7) }, (_, i) => <View key={i} style={[s.hatch, { left: i * 7 }]} />)}
-        </View>
-      )}
-      {w > 0 && (
-        <LinearGradient colors={[alpha(color, 0.35), color]} start={{ x: 0, y: 0 }} end={{ x: 1, y: 0 }}
-          style={[s.fill, { left: Math.min(o, pos), width: Math.abs(pos - o) }]} />
-      )}
-      {w > 0 && (
-        <View style={[s.thumb, { left: pos - THUMB / 2, shadowColor: color, borderColor: color }]} pointerEvents="none">
-          <View style={[s.thumbDot, { backgroundColor: color }]} />
-        </View>
-      )}
+        <View style={{ position: 'absolute', left: THUMB / 2, right: THUMB / 2, top: (H - TRACK) / 2, height: TRACK, borderRadius: TRACK, backgroundColor: C.panel3 }} />
+        {floor !== undefined && w > 0 && (
+          <View style={[s.floor, { width: floorX, top: (H - 14) / 2 }]}>
+            {Array.from({ length: Math.ceil(floorX / 7) }, (_, i) => <View key={i} style={[s.hatch, { left: i * 7 }]} />)}
+          </View>
+        )}
+        {w > 0 && <View style={{ position: 'absolute', top: (H - TRACK) / 2, height: TRACK, borderRadius: TRACK, backgroundColor: color, left: Math.min(o, pos), width: Math.abs(pos - o) }} />}
+        {w > 0 && <View style={[s.thumb, { left: pos - THUMB / 2, top: (H - THUMB) / 2, width: THUMB, height: THUMB, borderRadius: THUMB / 2, borderColor: color }]} />}
       </View>
     </View>
   );
 }
 
 const s = StyleSheet.create({
-  track: { position: 'absolute', left: THUMB / 2, right: THUMB / 2, height: TRACK, borderRadius: TRACK, backgroundColor: C.panel3, borderWidth: StyleSheet.hairlineWidth, borderColor: C.line2 },
   floor: { position: 'absolute', left: 0, height: 14, overflow: 'hidden', borderRadius: 4, backgroundColor: alpha(C.danger, 0.1) },
-  hatch: { position: 'absolute', top: -4, width: 2, height: 22, backgroundColor: alpha(C.danger, 0.4), transform: [{ rotate: '35deg' }] },
-  fill: { position: 'absolute', height: TRACK, borderRadius: TRACK },
-  thumb: { position: 'absolute', width: THUMB, height: THUMB, borderRadius: THUMB / 2, backgroundColor: '#0B1020', borderWidth: 2, alignItems: 'center', justifyContent: 'center', shadowOpacity: 0.8, shadowRadius: 8, elevation: 4 },
-  thumbDot: { width: 6, height: 6, borderRadius: 3 },
+  hatch: { position: 'absolute', top: -4, width: 2, height: 22, backgroundColor: alpha(C.danger, 0.35), transform: [{ rotate: '35deg' }] },
+  thumb: { position: 'absolute', backgroundColor: '#F4F6F9', borderWidth: 3 },
 });

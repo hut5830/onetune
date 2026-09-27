@@ -1,13 +1,12 @@
-import { Change, Driver, Frame } from './types';
+import { Change, Frame } from './types';
 import { TuningState } from '../model/tuning';
-import { profileById } from './profiles';
 
 /**
  * Demo framing: [A5][cmd][len][payload…][sum & FF].
  * It exists only to exercise the queue/log pipeline. Real drivers replace
  * `encode` with the byte layout captured from each brand's app.
  */
-const CMD = { EQ: 0x10, XO: 0x20, GAIN: 0x30, DELAY: 0x31, PHASE: 0x32, MUTE: 0x33, INPUT: 0x40, ROUTE: 0x41, MASTER: 0x50 };
+const CMD = { EQ: 0x10, XO: 0x20, GAIN: 0x30, DELAY: 0x31, PHASE: 0x32, MUTE: 0x33, LIMIT: 0x34, INPUT: 0x40, ROUTE: 0x41, MASTER: 0x50 };
 const u16 = (v: number) => { const n = Math.round(v) & 0xffff; return [n >> 8, n & 0xff]; };
 
 function frame(key: string, label: string, cmd: number, payload: number[]): Frame {
@@ -33,6 +32,7 @@ export function encodeDemo(change: Change, s: TuningState): Frame[] {
     case 'gain': return [frame(`g${ch!.id}`, `GAIN ${ch!.short}`, CMD.GAIN, [idx(ch!.id), ...u16(ch!.gain * 10 + 1000)])];
     case 'delay': return [frame(`d${ch!.id}`, `DELAY ${ch!.short}`, CMD.DELAY, [idx(ch!.id), ...u16(Math.round(ch!.delay * 48))])];
     case 'phase': return [frame(`p${ch!.id}`, `PHASE ${ch!.short}`, CMD.PHASE, [idx(ch!.id), ch!.phase ? 1 : 0])];
+    case 'limiter': return [frame(`l${ch!.id}`, `LIMIT ${ch!.short}`, CMD.LIMIT, [idx(ch!.id), ch!.limiter.on ? 1 : 0, ...u16(ch!.limiter.threshold * 10 + 1000)])];
     case 'mute': return [frame(`m${ch!.id}`, `MUTE ${ch!.short}`, CMD.MUTE, [idx(ch!.id), ch!.mute ? 1 : 0])];
     case 'route': return [frame(`r${ch!.id}`, `ROUTE ${ch!.short}`, CMD.ROUTE, [idx(ch!.id), (s.route[ch!.id] ?? []).reduce((m, i) => m | (1 << i), 0)])];
     case 'master': return [frame('mv', 'MASTER', CMD.MASTER, u16(s.master * 10 + 1000))];
@@ -40,4 +40,3 @@ export function encodeDemo(change: Change, s: TuningState): Frame[] {
   }
 }
 
-export const demoDriver: Driver = { id: 'demo', mapped: true, profile: profileById('demo')!, encode: encodeDemo };

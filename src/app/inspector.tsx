@@ -7,13 +7,12 @@ import { captureLog, LogEntry, useCaptureLog, useLogPaused } from '../ble/captur
 import { connection, useConnection } from '../ble/connection';
 import { parseHex, shortUuid } from '../lib/hex';
 import { haptic } from '../lib/haptics';
-import { Icon } from '../components/Icon';
-import { Btn, Card, Header, Pulse, Screen, SectionTitle, T, Toggle, st } from '../components/ui';
-import { C, F, R, S, alpha } from '../theme';
+import { Btn, Card, Dot, Header, Note, Screen, SectionTitle, T, Toggle, st } from '../components/ui';
+import { C, F, MAX_W, R, S, alpha } from '../theme';
 
 const props = (c: CharInfo) => [c.readable && 'R', c.writable && 'W', c.writableNoResp && 'WnR', c.notifiable && 'N', c.indicatable && 'I'].filter(Boolean).join(' ');
-const DIR_COLOR: Record<LogEntry['dir'], string> = { tx: C.cyan, rx: C.lime, note: C.muted, err: C.danger };
-const DIR_LABEL: Record<LogEntry['dir'], string> = { tx: 'TX', rx: 'RX', note: 'NOTE', err: 'ERR' };
+const DIR_COLOR: Record<LogEntry['dir'], string> = { tx: C.accent, rx: C.ok, note: C.muted, err: C.danger };
+const DIR_LABEL: Record<LogEntry['dir'], string> = { tx: 'ส่ง', rx: 'รับ', note: 'โน้ต', err: 'ผิดพลาด' };
 
 export default function Inspector() {
   const { id, name } = useLocalSearchParams<{ id?: string; name?: string }>();
@@ -58,23 +57,20 @@ export default function Inspector() {
   const header = (
     <View style={{ gap: S.md, marginBottom: S.md }}>
       {id ? (
-        <Card glow={connected ? C.ok : undefined}>
+        <Card>
           <View style={st.row}>
-            <Pulse color={connected ? C.ok : conn.status === 'error' ? C.danger : conn.status === 'connecting' ? C.amber : C.muted} />
+            <Dot color={connected ? C.ok : conn.status === 'error' ? C.danger : conn.status === 'connecting' ? C.warn : C.muted} size={10} pulse={conn.status === 'connecting'} />
             <View style={{ flex: 1 }}>
               <T v="h">{statusText}</T>
-              <T v="mono" style={{ color: C.muted, fontSize: 11 }}>{id}{conn.mtu ? ` · MTU ${conn.mtu}` : ''}</T>
+              <T v="mono" style={{ color: C.muted, fontSize: 11.5 }}>{id}{conn.mtu ? ` · MTU ${conn.mtu}` : ''}</T>
             </View>
             {connected ? <Btn small kind="ghost" label="ตัดการเชื่อมต่อ" onPress={() => void connection.disconnect()} />
               : <Btn small kind="primary" label="เชื่อมต่อ" onPress={() => void connection.connect(id, name || null)} disabled={conn.status === 'connecting' || !ble.available()} />}
           </View>
-          {conn.error && <T v="small" style={{ color: C.danger }}>{conn.error} · ตรวจว่า DSP เปิดอยู่ และไม่ได้เชื่อมกับแอปอื่นค้างไว้</T>}
+          {conn.error && <T v="small" style={{ color: C.danger }}>{conn.error} · ตรวจว่าเครื่องเปิดอยู่ และปิดแอปอื่นที่อาจเชื่อมค้างไว้</T>}
         </Card>
       ) : (
-        <View style={s.hint}>
-          <Icon name="info" size={16} color={C.cyan} />
-          <T v="small" style={{ flex: 1 }}>ยังไม่ได้ต่ออุปกรณ์ หน้านี้แสดงคำสั่งที่หน้าจูนส่งออก ใช้เทียบไบต์ตอนถอดโปรโตคอล</T>
-        </View>
+        <Note>หน้านี้แสดงคำสั่งที่หน้าจูนส่งออก ใช้เทียบไบต์ตอนถอดโปรโตคอล</Note>
       )}
 
       {connected && (
@@ -82,11 +78,11 @@ export default function Inspector() {
           <SectionTitle label="โครงสร้าง GATT" right={<T v="small">R อ่าน · W เขียน · N แจ้งเตือน</T>} />
           {conn.services.map(sv => (
             <Card key={sv.uuid} style={{ gap: 6 }}>
-              <T v="label" style={{ color: C.cyan }}>Service {shortUuid(sv.uuid)}</T>
+              <T v="label" style={{ color: C.accent }}>Service {shortUuid(sv.uuid)}</T>
               {sv.chars.map(c => {
                 const on = sel && key(sel) === key(c);
                 return (
-                  <Pressable key={c.uuid} onPress={() => { haptic.tick(); setSel(c); }} style={[s.chr, on && { borderColor: C.cyan, backgroundColor: alpha(C.cyan, 0.08) }]} accessibilityRole="button" accessibilityState={{ selected: !!on }}>
+                  <Pressable key={c.uuid} onPress={() => { haptic.tick(); setSel(c); }} style={[s.chr, on && { borderColor: C.accent, backgroundColor: alpha(C.accent, 0.08) }]} accessibilityRole="button" accessibilityState={{ selected: !!on }}>
                     <Text style={s.chrId}>{shortUuid(c.uuid)}</Text>
                     <Text style={s.chrP}>{props(c)}{subs[key(c)] ? ' · รับอยู่' : ''}</Text>
                   </Pressable>
@@ -98,7 +94,7 @@ export default function Inspector() {
       )}
 
       {connected && sel && (
-        <Card glow={C.cyan}>
+        <Card active={C.accent}>
           <T v="h">{shortUuid(sel.uuid)}</T>
           <View style={{ flexDirection: 'row', gap: S.sm, flexWrap: 'wrap' }}>
             {sel.readable && <Btn small label="อ่านค่า" onPress={() => void read(sel)} />}
@@ -108,7 +104,7 @@ export default function Inspector() {
             <>
               <View style={{ flexDirection: 'row', gap: S.sm }}>
                 <TextInput value={hex} onChangeText={t => { setHex(t); setHexErr(''); }} placeholder="A5 50 02 FF 38 D6" placeholderTextColor={C.faint}
-                  autoCapitalize="characters" autoCorrect={false} style={[s.input, { fontFamily: F.numMed }]} accessibilityLabel="hex ที่จะส่ง" selectionColor={C.cyan} />
+                  autoCapitalize="characters" autoCorrect={false} style={s.input} accessibilityLabel="hex ที่จะส่ง" selectionColor={C.accent} />
                 <Btn kind="primary" icon="send" label="ส่ง" onPress={() => void write(sel)} />
               </View>
               {hexErr ? <T v="small" style={{ color: C.danger }}>{hexErr}</T> : null}
@@ -118,12 +114,12 @@ export default function Inspector() {
       )}
 
       <View style={{ flexDirection: 'row', gap: S.sm }}>
-        <TextInput value={note} onChangeText={setNote} onSubmitEditing={addNote} placeholder="จดโน้ต เช่น ปรับ EQ 1k +3 dB" placeholderTextColor={C.faint} style={s.input} accessibilityLabel="โน้ต" selectionColor={C.cyan} />
-        <Btn label="จด" icon="edit" onPress={addNote} />
+        <TextInput value={note} onChangeText={setNote} onSubmitEditing={addNote} placeholder="จดโน้ต เช่น ปรับ EQ 1k +3 dB" placeholderTextColor={C.faint} style={s.input} accessibilityLabel="โน้ต" selectionColor={C.accent} />
+        <Btn label="จด" onPress={addNote} />
       </View>
-      <SectionTitle label={`Log · ${log.length}`} right={<View style={[st.row, { gap: S.sm }]}><T v="small">บันทึก</T><Toggle value={!paused} onChange={v => captureLog.setPaused(!v)} label="บันทึก log" /></View>} />
+      <SectionTitle label={`Log (${log.length})`} right={<View style={[st.row, { gap: S.sm }]}><T v="small">บันทึก</T><Toggle value={!paused} onChange={v => captureLog.setPaused(!v)} label="บันทึก log" /></View>} />
       <View style={{ flexDirection: 'row', gap: S.sm }}>
-        <Btn small icon="share" label="แชร์ log (JSON)" onPress={() => void Share.share({ message: captureLog.toJson() })} style={{ flex: 1 }} />
+        <Btn small kind="primary" icon="share" label="แชร์ log (JSON)" onPress={() => void Share.share({ message: captureLog.toJson() })} style={{ flex: 1 }} />
         <Btn small kind="ghost" icon="trash" label="ล้าง" onPress={() => captureLog.clear()} />
       </View>
     </View>
@@ -131,16 +127,16 @@ export default function Inspector() {
 
   return (
     <Screen>
-      <Header title={id ? (name || 'BLE Inspector') : 'Log คำสั่ง'} sub={id ? 'BLE Inspector' : 'คำสั่งที่ส่งออกจากหน้าจูน'}  />
+      <Header title={id ? (name || 'BLE Inspector') : 'Log คำสั่ง'} sub={id ? 'BLE Inspector' : 'คำสั่งที่ส่งออกจากหน้าจูน'} />
       <FlatList
-        contentContainerStyle={{ paddingHorizontal: S.lg, paddingBottom: inset.bottom + 40 }}
+        contentContainerStyle={{ paddingLeft: inset.left + S.lg, paddingRight: inset.right + S.lg, paddingBottom: inset.bottom + 40, width: '100%', maxWidth: MAX_W + inset.left + inset.right + S.xl, alignSelf: 'center' }}
         data={[...log].reverse()}
         keyExtractor={e => String(e.id)}
         ListHeaderComponent={header}
         ListEmptyComponent={<T v="small" style={{ textAlign: 'center', padding: S.xl }}>ยังไม่มีรายการ ลองอ่าน/ส่งค่า หรือปรับเสียงในหน้าจูน</T>}
         renderItem={({ item }) => (
           <View style={s.logRow}>
-            <View style={[s.dir, { borderColor: alpha(DIR_COLOR[item.dir], 0.5), backgroundColor: alpha(DIR_COLOR[item.dir], 0.1) }]}><Text style={[s.dirT, { color: DIR_COLOR[item.dir] }]}>{DIR_LABEL[item.dir]}</Text></View>
+            <Text style={[s.dir, { color: DIR_COLOR[item.dir] }]}>{DIR_LABEL[item.dir]}</Text>
             <View style={{ flex: 1, gap: 2 }}>
               <View style={[st.row, { gap: 8 }]}>
                 <Text style={s.logL} numberOfLines={2}>{item.label}</Text>
@@ -156,15 +152,13 @@ export default function Inspector() {
 }
 
 const s = StyleSheet.create({
-  hint: { flexDirection: 'row', gap: 8, alignItems: 'center', padding: S.md, borderRadius: R.md, borderWidth: 1, borderColor: alpha(C.cyan, 0.3), backgroundColor: alpha(C.cyan, 0.06) },
-  chr: { flexDirection: 'row', justifyContent: 'space-between', paddingVertical: 9, paddingHorizontal: 12, borderRadius: R.sm, borderWidth: 1, borderColor: C.line, backgroundColor: alpha(C.bg, 0.5) },
-  chrId: { fontFamily: F.num, color: C.ink, fontSize: 13.5, fontVariant: ['tabular-nums'] },
-  chrP: { fontFamily: F.head, color: C.muted, fontSize: 12 },
-  input: { flex: 1, fontFamily: F.body, backgroundColor: alpha(C.bg, 0.7), borderWidth: 1, borderColor: C.line2, borderRadius: R.md, paddingHorizontal: 12, paddingVertical: 10, color: C.ink, fontSize: 14 },
+  chr: { flexDirection: 'row', justifyContent: 'space-between', paddingVertical: 10, paddingHorizontal: 12, borderRadius: R.sm, borderWidth: 1, borderColor: C.line, backgroundColor: C.panel2 },
+  chrId: { fontFamily: F.semi, color: C.ink, fontSize: 13.5, fontVariant: ['tabular-nums'] },
+  chrP: { fontFamily: F.medium, color: C.muted, fontSize: 12.5 },
+  input: { flex: 1, fontFamily: F.regular, backgroundColor: C.panel2, borderRadius: R.md, paddingHorizontal: 12, paddingVertical: 10, color: C.ink, fontSize: 14 },
   logRow: { flexDirection: 'row', gap: 10, paddingVertical: 9, borderBottomWidth: StyleSheet.hairlineWidth, borderColor: C.line },
-  dir: { width: 44, alignItems: 'center', borderWidth: 1, borderRadius: 7, paddingVertical: 2, alignSelf: 'flex-start' },
-  dirT: { fontFamily: F.head, fontSize: 10.5, letterSpacing: 0.8 },
-  logL: { flex: 1, fontFamily: F.bodyMed, color: C.ink2, fontSize: 12.5, lineHeight: 18 },
-  logT: { fontFamily: F.numMed, color: C.faint, fontSize: 10.5, fontVariant: ['tabular-nums'] },
-  hex: { fontFamily: F.numMed, color: C.ink, fontSize: 12.5, fontVariant: ['tabular-nums'], letterSpacing: 0.5 },
+  dir: { width: 50, fontFamily: F.semi, fontSize: 12 },
+  logL: { flex: 1, fontFamily: F.medium, color: C.ink2, fontSize: 12.5, lineHeight: 18 },
+  logT: { fontFamily: F.medium, color: C.faint, fontSize: 11, fontVariant: ['tabular-nums'] },
+  hex: { fontFamily: F.medium, color: C.ink, fontSize: 12.5, fontVariant: ['tabular-nums'], letterSpacing: 0.5 },
 });

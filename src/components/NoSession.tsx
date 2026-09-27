@@ -10,8 +10,8 @@ export function NoSession({ title }: { title: string }) {
     <Screen>
       <Header title={title} />
       <View style={{ padding: S.xl, gap: S.md, alignItems: 'center' }}>
-        <T v="h">ยังไม่ได้เปิดหน้าจูน</T>
-        <T v="small" style={{ textAlign: 'center' }}>เลือกอุปกรณ์หรือโหมดทดลองจากหน้าแรกก่อน</T>
+        <T v="h">ยังไม่ได้เลือกเครื่อง</T>
+        <T v="small" style={{ textAlign: 'center' }}>เลือกอุปกรณ์หรือรุ่นทดลองจากหน้าแรกก่อน</T>
         <Btn kind="primary" label="กลับหน้าแรก" onPress={() => router.replace('/')} />
       </View>
     </Screen>

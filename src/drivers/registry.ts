@@ -1,5 +1,5 @@
 import { Driver } from './types';
-import { demoDriver, encodeDemo } from './demo';
+import { encodeDemo } from './demo';
 import { PROFILES, profileById } from './profiles';
 
 /**
@@ -8,10 +8,11 @@ import { PROFILES, profileById } from './profiles';
  * frames to the log only — they never write to real hardware until `mapped` is true.
  */
 const unmapped = (id: string): Driver => ({ id, mapped: false, profile: profileById(id)!, encode: encodeDemo });
+/** Simulated models: `mapped` so the UI treats them as working, but they have no BLE target and only ever log. */
+const simulated = (id: string): Driver => ({ id, mapped: true, profile: profileById(id)!, encode: encodeDemo });
 
-export const DRIVERS: Record<string, Driver> = Object.fromEntries([
-  ['demo', demoDriver],
-  ...PROFILES.filter(p => p.id !== 'demo').map(p => [p.id, unmapped(p.id)] as const),
-]);
+export const DRIVERS: Record<string, Driver> = Object.fromEntries(
+  PROFILES.map(p => [p.id, p.family === 'demo' ? simulated(p.id) : unmapped(p.id)] as const),
+);
 
 export const driverFor = (profileId: string): Driver | undefined => DRIVERS[profileId];

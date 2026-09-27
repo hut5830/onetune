@@ -86,6 +86,50 @@ near(dl.HF_R.ms, 0); near(dl.HF_L.ms, 1, 0.011);
 const far = delaysFromDistances(spk.channels, { HF_L: 100, HF_R: 900 }, dspk);
 assert.ok(far.HF_L.clipped && far.HF_L.ms === dspk.delayMs[1]);
 
+// undo/redo: a burst of edits on one control is one step; redo restores it
+{
+  const t = new TuningSession(driverFor('demo-spk')!, null);
+  const g0 = t.state.channels.find(c => c.id === 'LF_L')!.gain;
+  t.setGain('LF_L', -1); t.setGain('LF_L', -2); t.setGain('LF_L', -3);
+  t.setMaster(-10);
+  t.undo();
+  assert.equal(t.state.master, -18);
+  assert.equal(t.state.channels.find(c => c.id === 'LF_L')!.gain, -3);
+  t.undo();
+  assert.equal(t.state.channels.find(c => c.id === 'LF_L')!.gain, g0);
+  assert.equal(t.getSnap().meta.canUndo, false);
+  t.redo(); t.redo();
+  assert.equal(t.state.master, -10);
+  assert.equal(t.getSnap().meta.canRedo, false);
+
+  // A/B: swapping flips between the two states and ending keeps the one playing
+  t.abStart(); t.setMaster(-30);
+  t.abSwap(); assert.equal(t.state.master, -10); assert.equal(t.getSnap().meta.ab, 'A');
+  t.abSwap(); assert.equal(t.state.master, -30);
+  t.abEnd(); assert.equal(t.getSnap().meta.ab, 'off');
+
+  // solo mutes the rest and a second tap restores the previous mutes
+  t.toggleMute('HF_R');
+  t.solo('LF_L');
+  assert.deepEqual(t.state.channels.filter(c => !c.mute).map(c => c.id), ['LF_L']);
+  t.solo('LF_L');
+  assert.deepEqual(t.state.channels.filter(c => c.mute).map(c => c.id), ['HF_R']);
+
+  // group level keeps the L/R balance
+  t.setLink(false); t.setGain('LF_L', -4); t.setGain('LF_R', -2);
+  t.setGroupLevel('lf', 0);
+  const lf = t.state.channels.filter(c => c.kind === 'lf').map(c => c.gain);
+  near(lf[0] + lf[1], 0, 0.01); near(lf[1] - lf[0], 2, 0.01);
+
+  // copying a woofer's crossover to a tweeter still keeps the tweeter protected
+  t.copyTo('LF_L', ['HF_L']);
+  const hf2 = t.state.channels.find(c => c.id === 'HF_L')!;
+  assert.ok(hf2.hpf.on && hf2.hpf.freq >= 1000);
+  t.rename('HF_L', '  ฮอร์นซ้าย ');
+  assert.equal(t.state.channels.find(c => c.id === 'HF_L')!.custom, 'ฮอร์นซ้าย');
+  t.dispose();
+}
+
 // queue coalesces frames with the same key and keeps only the last one
 (async () => {
   const sent: string[] = [];
