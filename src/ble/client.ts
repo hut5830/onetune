@@ -1,4 +1,4 @@
-import { BleManager, Device, State, Subscription } from 'react-native-ble-plx';
+import { BleErrorCode, BleManager, Device, State, Subscription } from 'react-native-ble-plx';
 import { base64ToBytes, bytesToBase64 } from '../lib/hex';
 
 export interface CharInfo {
@@ -81,7 +81,8 @@ export const ble = {
   monitor(id: string, c: CharInfo, onData: (b: Uint8Array) => void, onError: (msg: string) => void): () => void {
     const m = mgr(); if (!m) return () => {};
     const sub: Subscription = m.monitorCharacteristicForDevice(id, c.serviceUUID, c.uuid, (err, ch) => {
-      if (err) { onError(err.message); return; }
+      // remove() reports OperationCancelled through this callback; that is our own unsubscribe, not a failure.
+      if (err) { if (err.errorCode !== BleErrorCode.OperationCancelled) onError(err.message); return; }
       if (ch?.value) onData(base64ToBytes(ch.value));
     });
     return () => sub.remove();

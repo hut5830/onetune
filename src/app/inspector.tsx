@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { FlatList, Pressable, Share, StyleSheet, Text, TextInput, View } from 'react-native';
 import { useLocalSearchParams } from 'expo-router';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
@@ -27,7 +27,10 @@ export default function Inspector() {
   const [subs, setSubs] = useState<Record<string, () => void>>({});
 
   useEffect(() => { if (id && ble.available()) void connection.connect(id, name || null); }, [id]);
-  useEffect(() => () => Object.values(subs).forEach(off => off()), [subs]);
+  // Unsubscribe on unmount only: a cleanup keyed on `subs` cancelled every earlier subscription whenever one was added.
+  const subsRef = useRef(subs);
+  subsRef.current = subs;
+  useEffect(() => () => Object.values(subsRef.current).forEach(off => off()), []);
 
   const connected = conn.status === 'connected' && conn.deviceId === id;
   const key = (c: CharInfo) => `${c.serviceUUID}/${c.uuid}`;
@@ -39,8 +42,11 @@ export default function Inspector() {
   const toggleNotify = (c: CharInfo) => {
     const k = key(c);
     if (subs[k]) { subs[k](); const n = { ...subs }; delete n[k]; setSubs(n); captureLog.add('note', `หยุดรับ ${shortUuid(c.uuid)}`); return; }
-    const off = ble.monitor(id!, c, b => captureLog.add('rx', `NOTIFY ${shortUuid(c.uuid)}`, b, shortUuid(c.uuid)), m => captureLog.add('err', `notify ${shortUuid(c.uuid)}: ${m}`));
-    setSubs({ ...subs, [k]: off }); captureLog.add('note', `เริ่มรับ ${shortUuid(c.uuid)}`);
+    const off = ble.monitor(id!, c, b => captureLog.add('rx', `NOTIFY ${shortUuid(c.uuid)}`, b, shortUuid(c.uuid)), m => {
+      captureLog.add('err', `notify ${shortUuid(c.uuid)}: ${m}`);
+      setSubs(cur => { const n = { ...cur }; delete n[k]; return n; });
+    });
+    setSubs(cur => ({ ...cur, [k]: off })); captureLog.add('note', `เริ่มรับ ${shortUuid(c.uuid)}`);
   };
   const write = async (c: CharInfo) => {
     const bytes = parseHex(hex);
