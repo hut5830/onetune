@@ -5,7 +5,8 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { ble, CharInfo } from '../ble/client';
 import { captureLog, LogEntry, useCaptureLog, useLogPaused } from '../ble/captureLog';
 import { connection, useConnection } from '../ble/connection';
-import { parseHex, shortUuid } from '../lib/hex';
+import { parseHex, shortUuid, toHex } from '../lib/hex';
+import { check7e, frame7e, FRAME7E_MAX_BODY } from '../drivers/frame7e';
 import { haptic } from '../lib/haptics';
 import { Btn, Card, Dot, Header, Note, Screen, SectionTitle, T, Toggle, st } from '../components/ui';
 import { C, F, MAX_W, R, S, alpha } from '../theme';
@@ -13,6 +14,19 @@ import { C, F, MAX_W, R, S, alpha } from '../theme';
 const props = (c: CharInfo) => [c.readable && 'R', c.writable && 'W', c.writableNoResp && 'WnR', c.notifiable && 'N', c.indicatable && 'I'].filter(Boolean).join(' ');
 const DIR_COLOR: Record<LogEntry['dir'], string> = { tx: C.accent, rx: C.ok, note: C.muted, err: C.danger };
 const DIR_LABEL: Record<LogEntry['dir'], string> = { tx: 'ส่ง', rx: 'รับ', note: 'โน้ต', err: 'ผิดพลาด' };
+const HEX_ERR = 'ใส่เป็น hex ทีละไบต์ เช่น A5 50 02 หรือ A55002';
+
+/** Received bytes that start with 7E get a framing verdict so captures are easy to scan. */
+const tag7e = (b: Uint8Array) => (b[0] !== 0x7e ? '' : check7e(b) ? ' · 7E ✓' : ' · 7E checksum ไม่ตรง');
+
+/** Bytes to send. With `wrap`, CMD + data is wrapped as 7E LEN … SUM16; input that is already a full frame goes out unchanged. */
+function outgoing(input: string, wrap: boolean): { bytes: Uint8Array; framed: boolean } | { err: string } {
+  const b = parseHex(input);
+  if (!b) return { err: HEX_ERR };
+  if (!wrap || check7e(b)) return { bytes: b, framed: false };
+  if (b.length > FRAME7E_MAX_BODY) return { err: `ยาวเกิน ${FRAME7E_MAX_BODY} ไบต์` };
+  return { bytes: frame7e(b), framed: true };
+}
 
 export default function Inspector() {
   const { id, name } = useLocalSearchParams<{ id?: string; name?: string }>();
@@ -25,6 +39,7 @@ export default function Inspector() {
   const [hexErr, setHexErr] = useState('');
   const [note, setNote] = useState('');
   const [subs, setSubs] = useState<Record<string, () => void>>({});
+  const [wrap, setWrap] = useState(false);
 
   useEffect(() => { if (id && ble.available()) void connection.connect(id, name || null); }, [id]);
   // Unsubscribe on unmount only: a cleanup keyed on `subs` cancelled every earlier subscription whenever one was added.
@@ -36,24 +51,25 @@ export default function Inspector() {
   const key = (c: CharInfo) => `${c.serviceUUID}/${c.uuid}`;
 
   const read = async (c: CharInfo) => {
-    try { captureLog.add('rx', `READ ${shortUuid(c.uuid)}`, await ble.read(id!, c), shortUuid(c.uuid)); }
+    try { const b = await ble.read(id!, c); captureLog.add('rx', `READ ${shortUuid(c.uuid)}${tag7e(b)}`, b, shortUuid(c.uuid)); }
     catch (e) { captureLog.add('err', `อ่าน ${shortUuid(c.uuid)} ไม่ได้: ${e instanceof Error ? e.message : e}`); }
   };
   const toggleNotify = (c: CharInfo) => {
     const k = key(c);
     if (subs[k]) { subs[k](); const n = { ...subs }; delete n[k]; setSubs(n); captureLog.add('note', `หยุดรับ ${shortUuid(c.uuid)}`); return; }
-    const off = ble.monitor(id!, c, b => captureLog.add('rx', `NOTIFY ${shortUuid(c.uuid)}`, b, shortUuid(c.uuid)), m => {
+    const off = ble.monitor(id!, c, b => captureLog.add('rx', `NOTIFY ${shortUuid(c.uuid)}${tag7e(b)}`, b, shortUuid(c.uuid)), m => {
       captureLog.add('err', `notify ${shortUuid(c.uuid)}: ${m}`);
       setSubs(cur => { const n = { ...cur }; delete n[k]; return n; });
     });
     setSubs(cur => ({ ...cur, [k]: off })); captureLog.add('note', `เริ่มรับ ${shortUuid(c.uuid)}`);
   };
   const write = async (c: CharInfo) => {
-    const bytes = parseHex(hex);
-    if (!bytes) { haptic.warn(); setHexErr('ใส่เป็น hex ทีละไบต์ เช่น A5 50 02 หรือ A55002'); return; }
+    const out = outgoing(hex, wrap);
+    if ('err' in out) { haptic.warn(); setHexErr(out.err); return; }
     setHexErr('');
+    const { bytes, framed } = out;
     const withResp = c.writable && !c.writableNoResp ? true : !c.writableNoResp;
-    try { await ble.write(id!, c.serviceUUID, c.uuid, bytes, withResp); captureLog.add('tx', `WRITE ${shortUuid(c.uuid)}${withResp ? '' : ' (no resp)'}`, bytes, shortUuid(c.uuid)); }
+    try { await ble.write(id!, c.serviceUUID, c.uuid, bytes, withResp); captureLog.add('tx', `WRITE ${shortUuid(c.uuid)}${withResp ? '' : ' (no resp)'}${framed ? ' · ห่อ 7E' : ''}`, bytes, shortUuid(c.uuid)); }
     catch (e) { captureLog.add('err', `เขียน ${shortUuid(c.uuid)} ไม่ได้: ${e instanceof Error ? e.message : e}`); }
   };
   const addNote = () => { if (!note.trim()) return; captureLog.add('note', note.trim()); setNote(''); haptic.tick(); };
@@ -109,10 +125,22 @@ export default function Inspector() {
           {(sel.writable || sel.writableNoResp) && (
             <>
               <View style={{ flexDirection: 'row', gap: S.sm }}>
-                <TextInput value={hex} onChangeText={t => { setHex(t); setHexErr(''); }} placeholder="A5 50 02 FF 38 D6" placeholderTextColor={C.faint}
+                <TextInput value={hex} onChangeText={t => { setHex(t); setHexErr(''); }} placeholder={wrap ? '1F 01 00 14 31 32 33 34 00 00 00 00' : 'A5 50 02 FF 38 D6'} placeholderTextColor={C.faint}
                   autoCapitalize="characters" autoCorrect={false} style={s.input} accessibilityLabel="hex ที่จะส่ง" selectionColor={C.accent} />
                 <Btn kind="primary" icon="send" label="ส่ง" onPress={() => void write(sel)} />
               </View>
+              <View style={[st.row, { gap: S.sm }]}>
+                <T v="small" style={{ flex: 1 }}>ใส่ 7E · ความยาว · checksum ให้ (พิมพ์แค่ CMD + ข้อมูล)</T>
+                <Toggle value={wrap} onChange={setWrap} label="ห่อเฟรม 7E และคำนวณ checksum" />
+              </View>
+              {wrap && hex.trim() ? (() => {
+                const p = outgoing(hex, true);
+                if ('err' in p) return null;
+                return <View style={{ gap: 2 }}>
+                  <T v="small">{p.framed ? 'จะส่ง' : 'เป็นเฟรม 7E ครบแล้ว ส่งตามนี้'}</T>
+                  <Text style={s.hex} selectable>{toHex(p.bytes)}</Text>
+                </View>;
+              })() : null}
               {hexErr ? <T v="small" style={{ color: C.danger }}>{hexErr}</T> : null}
             </>
           )}

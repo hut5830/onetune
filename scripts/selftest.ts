@@ -3,9 +3,11 @@ import assert from 'node:assert/strict';
 import { parseHex, toHex, bytesToBase64, base64ToBytes, shortUuid } from '../src/lib/hex';
 import { bandDb, xoDb } from '../src/lib/dsp';
 import { initialState, fitXover, guardXover, LAYOUTS, CHANNELS, layoutsFor, defaultLayout, delaysFromDistances, MIN_HPF } from '../src/model/tuning';
-import { PROFILES, profileById } from '../src/drivers/profiles';
+import { PROFILES, matchProfile, profileById } from '../src/drivers/profiles';
 import { driverFor } from '../src/drivers/registry';
 import { encodeDemo } from '../src/drivers/demo';
+import { check7e, frame7e } from '../src/drivers/frame7e';
+import { encodeXyv122 } from '../src/drivers/xyv122';
 import { TuningSession } from '../src/model/session';
 import { WriteQueue } from '../src/ble/writeQueue';
 
@@ -20,6 +22,13 @@ for (const n of [0, 1, 2, 3, 4, 5, 20]) {
 }
 assert.equal(bytesToBase64(Uint8Array.from([0xa5, 0x50, 0x02])), 'pVAC');
 assert.equal(shortUuid('0000ffe1-0000-1000-8000-00805f9b34fb'), 'FFE1');
+
+// XYV122UE frames captured from the real unit (docs/protocols/xyv122.md)
+assert.equal(toHex(frame7e(parseHex('1F 01 00 14 31 32 33 34 00 00 00 00')!)), '7E 10 1F 01 00 14 31 32 33 34 00 00 00 00 01 8C');
+assert.ok(check7e(parseHex('7E 10 1F 01 00 19 31 32 33 34 00 00 00 00 01 91')!));
+assert.ok(check7e(parseHex('7E 0F C3 E3 14 01 0F 0F 0F 56 31 32 32 03 60')!));
+assert.ok(!check7e(parseHex('7E 10 1F 01 00 19 31 32 33 34 00 00 00 00 01 92')!));
+assert.ok(!check7e(parseHex('1F 01 00 14')!));
 
 const near = (a: number, b: number, tol = 0.05) => assert.ok(Math.abs(a - b) < tol, `${a} ≉ ${b}`);
 near(bandDb({ f: 1000, g: 6, q: 4.32, t: 'pk' }, 1000), 6);
@@ -61,6 +70,23 @@ const g = guardXover('tw', true, { on: false, freq: 20, slope: 6, type: 'BW' }, 
 assert.deepEqual([g.on, g.freq >= 1000, g.slope >= 12], [true, true, true]);
 assert.equal(guardXover('tw', false, { on: false, freq: 20000, slope: 24, type: 'LR' }, r500).on, false);
 assert.equal(guardXover('lf', true, { on: false, freq: 20, slope: 12, type: 'LR' }, r500).freq, 20);
+
+// Xinyi XY-HT21MAX: recognised by name, volume-only, emits only the verified 1F frame
+{
+  assert.equal(matchProfile('XYV122UE')?.id, 'ht21max');
+  const d = driverFor('ht21max')!;
+  assert.ok(d.mapped && d.ble?.write.startsWith('0000ae03'));
+  const t = new TuningSession(d, null);
+  assert.equal(t.state.master, 10);
+  assert.deepEqual(t.state.channels.map(c => c.id), ['FR_L', 'FR_R', 'SW']);
+  t.setMaster(99); assert.equal(t.state.master, 30);
+  t.setMaster(-5); assert.equal(t.state.master, 0);
+  t.setMaster(20);
+  assert.equal(toHex(encodeXyv122({ kind: 'master' }, t.state)[0].bytes), '7E 10 1F 01 00 14 31 32 33 34 00 00 00 00 01 8C');
+  for (const c of [{ kind: 'gain', ch: 'FR_L' }, { kind: 'eq', ch: 'FR_L', band: 0 }, { kind: 'xo', ch: 'SW', hp: false }, { kind: 'mute', ch: 'SW' }, { kind: 'input' }] as const)
+    assert.deepEqual(encodeXyv122(c, t.state), []);
+  t.dispose();
+}
 
 // the session enforces the guard for edits and for loaded presets
 const ses = new TuningSession(driverFor('demo-spk')!, null);

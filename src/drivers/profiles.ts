@@ -1,4 +1,4 @@
-import { CapabilityProfile } from './types';
+import { CapabilityProfile, Change } from './types';
 
 const S6 = [6, 12, 18, 24, 30, 36, 42, 48];
 
@@ -42,6 +42,20 @@ export const PROFILES: CapabilityProfile[] = [
     namePatterns: [/AXDSP/i, /AXXESS/i],
   },
   {
+    // 2.1 amp board (TPA3223), not a multi-band DSP: tone, sub level and sub cutoff are analog knobs on the board.
+    // EQ/XO/delay fields below only satisfy the type; with `controls` = master the studio never shows them.
+    id: 'ht21max', brand: 'Xinyi', model: 'XY-HT21MAX', family: 'own', transport: 'BLE',
+    outputs: 3, scenes: ['speaker'], hlInputs: 0, rcaInputs: 1, sources: ['bt', 'rca', 'usb'],
+    eq: { graphic: false, parametric: false, shelves: false, gain: [0, 0], gainStep: 1, q: [0.7, 0.7] },
+    xo: { types: ['BW'], slopes: { BW: [12] } },
+    channelGain: [0, 0], delayMs: [0, 0], delayStep: 0.01, extras: [],
+    unverified: true, source: 'สเปกร้านค้า + ทดสอบ volume กับเครื่องจริง (docs/protocols/xyv122.md)',
+    namePatterns: [/^XYV122/i, /HT21/i],
+    controls: ['master'],
+    master: { min: 0, max: 30, start: 10, unit: '/ 30' },
+    knobs: ['เบส / แหลม ซ้าย-ขวา', 'ระดับเสียงซับ', 'ความถี่ตัดซับ'],
+  },
+  {
     id: 'demo-spk', brand: 'Demo', model: 'DSP ลำโพงจำลอง 2in·4out', family: 'demo', transport: 'จำลอง',
     outputs: 4, scenes: ['speaker'], hlInputs: 0, rcaInputs: 2, sources: ['rca', 'bt', 'usb', 'opt'],
     eq: { graphic: true, parametric: true, shelves: true, gain: [-15, 15], gainStep: 0.1, q: [0.4, 20] },
@@ -71,3 +85,8 @@ export const FAMILY_NAME: Record<CapabilityProfile['family'], string> = {
 export const profileById = (id: string) => PROFILES.find(p => p.id === id);
 export const matchProfile = (name: string | null | undefined) =>
   name ? PROFILES.find(p => p.namePatterns.some(r => r.test(name))) : undefined;
+/** Whether the unit accepts this kind of change over Bluetooth. */
+export const canControl = (p: CapabilityProfile, kind: Change['kind']) => !p.controls || p.controls.includes(kind);
+/** Per-channel tuning (EQ, crossover, level, delay…) is available. */
+export const hasChannelTuning = (p: CapabilityProfile) => canControl(p, 'gain') || canControl(p, 'eq') || canControl(p, 'xo');
+export const masterRange = (p: CapabilityProfile) => p.master ?? { min: -60, max: 0, start: -18, unit: 'dB' };

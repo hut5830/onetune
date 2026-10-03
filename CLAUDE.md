@@ -17,7 +17,10 @@ react-native-ble-plx, react-native-svg. Builds via EAS (account `hut5830`, proje
 - `src/drivers/profiles.ts` — CapabilityProfile per model (outputs, scenes speaker/car, EQ gain/Q ranges, crossover types/slopes,
   delay max/step, extras). The UI only offers what the profile allows. Values marked `unverified` come from partial specs.
 - `src/drivers/*.ts` — Driver = `encode(Change, state) → Frame[]` + BLE target (service/write/notify UUIDs).
-  Only `demo.ts` exists (fake framing `A5 cmd len payload sum`). Other models use unmapped drivers.
+  `demo.ts` = fake framing `A5 cmd len payload sum`. First real driver: `xyv122.ts` (Xinyi XY-HT21MAX, `7E LEN CMD … SUM16`
+  via `frame7e.ts`, write AE03 / notify AE04) — encodes only hardware-verified commands (master volume), returns [] for the rest.
+  Protocol notes per device in `docs/protocols/`. Profiles may set `controls` (what the unit accepts over BLE; the studio
+  hides the rest, volume-only units get a remote-style screen), `master` range and `knobs`. Other models use unmapped drivers.
 - `src/model/tuning.ts` — channel defs, LAYOUTS per scene (output order = OUT 1…N), safe defaults, `guardXover` (MIN_HPF), delays from distances.
 - `src/model/session.ts` — tuning state, L/R link (delay never linked), copy-to-pair, layouts, presets, sends via `WriteQueue`
   (coalesces by frame key, one write at a time, 80 ms). BLE writer is injected (`src/model/current.ts`) so it runs in Node tests.

@@ -4,6 +4,7 @@ import { captureLog } from '../ble/captureLog';
 import { WriteQueue } from '../ble/writeQueue';
 import { Band, Channel, Limiter, Xover, TuningState, GROUPS, LIMIT_RANGE, defaultRoute, delaysFromDistances, diffChanges, guardXover, initialState, inputCount, layoutById } from './tuning';
 import { clamp } from '../lib/format';
+import { masterRange } from '../drivers/profiles';
 
 type Linkable = (c: Channel) => void;
 /** Writes bytes to the device. Injected so this module stays free of native BLE code (and testable in Node). */
@@ -207,7 +208,7 @@ export class TuningSession {
     this.commit(s => { const c = s.channels.find(x => x.id === chId)!; c.custom = name.trim() || undefined; }, () => []);
   }
 
-  setMaster(db: number) { this.commit(s => { s.master = clamp(Math.round(db), -60, 0); }, () => [{ kind: 'master' }], 'master'); }
+  setMaster(v: number) { const r = masterRange(this.profile); this.commit(s => { s.master = clamp(Math.round(v), r.min, r.max); }, () => [{ kind: 'master' }], 'master'); }
   setLink(on: boolean) { this.commit(s => { s.link = on; }, () => []); }
 
   /**

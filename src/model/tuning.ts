@@ -1,5 +1,6 @@
 import { CapabilityProfile, Change, Scene, SourceId, XoType } from '../drivers/types';
 import { clamp } from '../lib/format';
+import { masterRange } from '../drivers/profiles';
 
 export const ISO = [20, 25, 31.5, 40, 50, 63, 80, 100, 125, 160, 200, 250, 315, 400, 500, 630, 800, 1000, 1250, 1600, 2000, 2500, 3150, 4000, 5000, 6300, 8000, 10000, 12500, 16000, 20000];
 
@@ -191,7 +192,7 @@ export function initialState(p: CapabilityProfile, scene: Scene = p.scenes[0], l
   const layout = found && found.scene === scene && found.channels.length <= p.outputs ? found : defaultLayout(p, scene);
   const channels = buildChannels(p, layout);
   const source = p.sources[0];
-  return { profileId: p.id, scene, layoutId: layout.id, channels, master: -18, link: true, source, route: defaultRoute(channels, inputCount(p, source)), distances: {} };
+  return { profileId: p.id, scene, layoutId: layout.id, channels, master: masterRange(p).start, link: true, source, route: defaultRoute(channels, inputCount(p, source)), distances: {} };
 }
 
 /** Speed of sound: 34.3 cm per millisecond at ~20 °C. */

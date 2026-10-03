@@ -29,6 +29,12 @@ export interface CapabilityProfile {
   source: string;
   /** Advertised-name patterns used to recognise the device during a scan (to be confirmed). */
   namePatterns: RegExp[];
+  /** Settings the unit accepts over Bluetooth. Omitted = a full DSP (everything above). The studio hides the rest. */
+  controls?: Change['kind'][];
+  /** Master volume as the unit counts it. Default -60…0 dB, starting at -18. */
+  master?: { min: number; max: number; start: number; unit: string };
+  /** Settings that live on physical knobs of the unit; shown as a hint, never sent. */
+  knobs?: string[];
 }
 
 export type Change =

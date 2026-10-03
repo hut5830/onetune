@@ -4,6 +4,7 @@ import { useFocusEffect, useLocalSearchParams, useRouter } from 'expo-router';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { activateKeepAwakeAsync, deactivateKeepAwake } from 'expo-keep-awake';
 import { driverFor } from '../drivers/registry';
+import { canControl, hasChannelTuning, masterRange } from '../drivers/profiles';
 import { Scene, SourceId } from '../drivers/types';
 import { TuningSession, useSessionMeta, useSessionState } from '../model/session';
 import { openSession } from '../model/current';
@@ -76,6 +77,9 @@ function Studio({ session }: { session: TuningSession }) {
   useFocusEffect(useCallback(() => { void store.presets(p.id).then(setPresets); }, [p.id]));
 
   const status: Mode = session.live ? 'live' : session.driver.mapped ? 'sim' : 'preview';
+  /** Amp boards without per-channel DSP get a remote-style screen: master volume (and source) only. */
+  const basic = !hasChannelTuning(p);
+  const mr = masterRange(p);
   const layout = layoutById(state.layoutId);
   const select = (id: string) => { haptic.tap(); setSel(id); };
 
@@ -115,13 +119,14 @@ function Studio({ session }: { session: TuningSession }) {
 
   const master = (
     <Card style={{ flexDirection: 'row', alignItems: 'center', gap: S.lg }}>
-      <Knob label="ระดับเสียงรวม" value={state.master} min={-60} max={0} onChange={v => session.setMaster(v)} size={mode === 'easy' ? 160 : 136} />
+      <Knob label="ระดับเสียงรวม" value={state.master} min={mr.min} max={mr.max} unit={mr.unit} pxPerUnit={Math.max(4, 240 / (mr.max - mr.min))}
+        onChange={v => session.setMaster(v)} size={mode === 'easy' || basic ? 160 : 136} />
       <View style={{ flex: 1, gap: S.md }}>
         <View>
           <T v="h">ระดับเสียงรวม</T>
           <T v="small">ลากขึ้น-ลงที่ปุ่มหมุน</T>
         </View>
-        {mode === 'easy' ? (
+        {basic ? null : mode === 'easy' ? (
           <View style={st.row}>
             <T v="bodyMed" style={{ flex: 1 }}>ปิดเสียงทั้งหมด</T>
             <Toggle value={state.channels.every(c => c.mute)} onChange={v => session.muteAll(v)} label="ปิดเสียงทั้งหมด" />
@@ -173,7 +178,7 @@ function Studio({ session }: { session: TuningSession }) {
         onChange={v => subs.forEach(c => session.setXover(c.id, false, { freq: v, on: true }))} />
     </Card>
   );
-  const easySource = p.sources.length > 1 && (
+  const easySource = p.sources.length > 1 && canControl(p, 'input') && (
     <Card>
       <T v="h">แหล่งเสียง</T>
       <Segmented options={p.sources} value={state.source} format={x => SRC_NAME[x]} onChange={v => session.setSource(v)} />
@@ -276,8 +281,15 @@ function Studio({ session }: { session: TuningSession }) {
     <ScrollView style={{ flex: 1 }} contentContainerStyle={{ gap: S.md, paddingBottom: inset.bottom + 40 }}>{children}</ScrollView>
   );
 
+  const knobsNote = p.knobs?.length ? (
+    <Note icon="info" color={C.accent}>{`ปรับที่ปุ่มหมุนบนเครื่อง: ${p.knobs.join(' · ')}`}</Note>
+  ) : null;
+  const logBtn = <Btn icon="terminal" label="Log คำสั่ง" onPress={() => router.push('/inspector')} />;
+
   let body: ReactNode;
-  if (mode === 'easy') {
+  if (basic) {
+    body = <ScrollView contentContainerStyle={s.single(inset)}><View style={s.inner}>{banners}{master}{easySource}{knobsNote}{logBtn}</View></ScrollView>;
+  } else if (mode === 'easy') {
     body = wide
       ? <View style={s.cols}>{col(<>{banners}{master}{easySource}{easyPresets}</>)}{col(<>{easyLevels}{easySub}</>)}</View>
       : <ScrollView contentContainerStyle={s.single(inset)}><View style={s.inner}>{banners}{master}{easyLevels}{easySub}{easySource}{easyPresets}</View></ScrollView>;
@@ -292,11 +304,11 @@ function Studio({ session }: { session: TuningSession }) {
       <Header title={`${p.brand} ${p.model}`}
         sub={<View style={[st.row, { gap: 8, marginTop: 2 }]}><StatusPill mode={status} />{session.deviceId && conn.deviceId === session.deviceId && <T v="small" numberOfLines={1} style={{ flex: 1 }}>{{ idle: 'ไม่ได้เชื่อมต่อ', connecting: 'กำลังเชื่อมต่อ…', connected: 'เชื่อมต่อแล้ว', error: 'เชื่อมต่อไม่สำเร็จ' }[conn.status]}</T>}</View>}
         right={<View style={{ flexDirection: 'row', gap: 6, alignItems: 'center' }}>
-          {wide && <View style={{ width: 260, marginRight: S.sm }}><Segmented full options={['easy', 'pro'] as const} value={mode} format={m => (m === 'easy' ? 'ใช้งานง่าย' : 'ปรับละเอียด')} onChange={setMode} /></View>}
+          {wide && !basic && <View style={{ width: 260, marginRight: S.sm }}><Segmented full options={['easy', 'pro'] as const} value={mode} format={m => (m === 'easy' ? 'ใช้งานง่าย' : 'ปรับละเอียด')} onChange={setMode} /></View>}
           <IconBtn name="undo" label="ย้อนกลับ" disabled={!meta.canUndo} onPress={() => session.undo()} />
           <IconBtn name="redo" label="ทำซ้ำ" disabled={!meta.canRedo} onPress={() => session.redo()} />
         </View>} />
-      {!wide && (
+      {!wide && !basic && (
         <View style={[s.modeBar, { paddingLeft: inset.left + S.lg, paddingRight: inset.right + S.lg }]}>
           <View style={{ width: '100%', maxWidth: 640, alignSelf: 'center' }}><Segmented full options={['easy', 'pro'] as const} value={mode} format={m => (m === 'easy' ? 'ใช้งานง่าย' : 'ปรับละเอียด')} onChange={setMode} /></View>
         </View>
